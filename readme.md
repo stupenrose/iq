@@ -6,6 +6,7 @@ foundational principles
  1. persistent build daemon
  1. watches filesystem
      - able to intelligently determine relationships between all modules being watched
+     - leverages static type systems where able (e.g. read java .class files for per-class incremental builds)
      - rebuilds builds dependent modules were able
      - automatically update/restart daemons when code changes
 
