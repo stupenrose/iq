@@ -7,6 +7,7 @@ foundational principles
  1. watches filesystem
      - able to intelligently determine relationships between all modules being watched
      - rebuilds builds dependent modules were able
+     - automatically update/restart daemons when code changes
 
 goals
 =======================
