@@ -7,7 +7,7 @@ foundational principles
  1. watches filesystem
      - able to intelligently determine relationships between all modules being watched
      - leverages static type systems where able (e.g. read java .class files for per-class incremental builds)
-     - rebuilds builds dependent modules were able
+     - rebuilds builds dependent modules/code
      - automatically update/restart daemons when code changes
 
 goals
