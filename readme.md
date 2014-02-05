@@ -24,7 +24,7 @@ goals
          - optimization/compilation tools
            - coffeescript
        - .net
-       - C/Cpp, etc
+       - C/Cpp/ObjC, etc
          - 'make' replacement
        - scripting languages
          - ruby/rails
