@@ -14,7 +14,7 @@ case class DependencySpec(module:ModuleId, version:Option[String] = None, inclus
 
 object ModuleDescriptor{
   def parse(text:String): ModuleDescriptor = {
-    val lines = text.trim.split("\\n")
+    val lines = text.trim.split("""\r\n|\r|\n""")
     				.filter(!_.trim.startsWith("//")) // minus comments
     				.toSeq
     

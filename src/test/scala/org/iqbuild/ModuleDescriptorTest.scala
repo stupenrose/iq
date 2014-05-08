@@ -1,14 +1,12 @@
 package org.iqbuild
 
-import org.junit.Test
-import org.junit.Assert._
+import org.scalatest.FunSuite
 
-class ModuleDescriptorTest {
+class ModuleDescriptorTest extends FunSuite {
 
   private def prettyText(t:String) = t.stripMargin('|').trim
-  
-  @Test
-  def everyVariant(){
+
+  test("every variant"){
     // given
     val text = prettyText("""
          |id us.penrose:myapp
@@ -20,38 +18,38 @@ class ModuleDescriptorTest {
          | commons-lang::1.2.2
          | ~:htmldocs (unzipped)
          | org.codehaus.mojo:animal-sniffer-maven-plugin""")
-     
+
      // when
      val m = ModuleDescriptor.parse(text)
-     
+
      // then
-     assertEquals(ModuleId(group="us.penrose", name="myapp"), m.id)
-     assertEquals("jar", m.build)
-     assertEquals(4, m.deps.size)
-     assertEquals(DependencySpec(module=ModuleId(group="us.penrose", name="mylibA")), m.deps(0))
-     assertEquals(DependencySpec(module=ModuleId(group="commons-lang", name="commons-lang")), m.deps(1))
-     assertEquals(DependencySpec(module=ModuleId(group="us.penrose", name="htmldocs"), inclusion=Some("unzipped")), m.deps(2))
-     assertEquals(DependencySpec(module=ModuleId(group="org.codehaus.mojo", name="animal-sniffer-maven-plugin")), m.deps(3))
+    println(ModuleId(group="us.penrose", name="myapp"))
+    println(m.id)
+     assert(ModuleId(group="us.penrose", name="myapp") === m.id)
+     assert("jar" === m.build)
+     assert(4 === m.deps.size)
+     assert(DependencySpec(module=ModuleId(group="us.penrose", name="mylibA")) === m.deps(0))
+     assert(DependencySpec(module=ModuleId(group="commons-lang", name="commons-lang")) === m.deps(1))
+     assert(DependencySpec(module=ModuleId(group="us.penrose", name="htmldocs"), inclusion=Some("unzipped")) === m.deps(2))
+     assert(DependencySpec(module=ModuleId(group="org.codehaus.mojo", name="animal-sniffer-maven-plugin")) === m.deps(3))
   }
-  
-  @Test
-  def minimalDescriptor(){
+
+  test("minimal descriptor"){
     // given
     val text = prettyText("""
          |id foo:bar
          |build jar""")
-     
+
      // when
      val m = ModuleDescriptor.parse(text)
-     
+
      // then
-     assertEquals(ModuleId(group="foo", name="bar"), m.id)
-     assertEquals("jar", m.build)
-     assertEquals(0, m.deps.size)
+     assert(ModuleId(group="foo", name="bar") === m.id)
+     assert("jar" === m.build)
+     assert(0 === m.deps.size)
   }
-  
-  @Test
-  def ignoresComments(){
+
+  test("ignores comments"){
     // given
     val text = prettyText("""
          | // this is a comment
@@ -61,13 +59,13 @@ class ModuleDescriptorTest {
          | // this is a comment.  ignore me
          |build jar
          | // this one too""")
-     
+
      // when
      val m = ModuleDescriptor.parse(text)
-     
+
      // then
-     assertEquals(ModuleId(group="foo", name="bar"), m.id)
-     assertEquals("jar", m.build)
-     assertEquals(0, m.deps.size)
+     assert(ModuleId(group="foo", name="bar") === m.id)
+     assert("jar" === m.build)
+     assert(0 === m.deps.size)
   }
 }
