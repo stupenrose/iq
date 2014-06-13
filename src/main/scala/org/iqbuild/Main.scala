@@ -54,9 +54,7 @@ object Main {
         
         exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir)
         val contents = find(stagingDir){i=>true}.toList
-        contents.foreach{f=>
-        	exec(List("jar", "-cvf", productFile.getAbsolutePath(), "-C", relativePath(stagingDir, path), relativePath(f, stagingDir)), path)
-        }
+        exec(List("jar", "-cvf", productFile.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir)
         val end = System.currentTimeMillis()
         val seconds = (end - start) /1000.0
         println("Finished - " + seconds + " seconds")
