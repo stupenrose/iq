@@ -1,0 +1,14 @@
+build a single jar with 2 java classes
+build a single jar with java classes & static resources
+build a single jar with java classes & jshint
+build a single jar with java classes & jshint & minimization
+build a single jar with java classes & jshint & require.js optimization
+build a single jar with java classes & coffeescript
+build a zip with coffeescript & jshint & minimization
+build a single jar with scala classes & static resources
+build a single jar with groovy classes & static resources
+build a single jar with clojure code & static resources
+multiple modules
+multiple modules with interdependencies
+build a single jar that depends on unpacked zip stuff in the classpath
+
