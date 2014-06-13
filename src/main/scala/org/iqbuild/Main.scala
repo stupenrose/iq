@@ -28,8 +28,8 @@ object Main {
     case class ModuleWorkingInfo (descriptor:Timestamped[ModuleDescriptor])
     
     
-    var resolver = new DependencyResolver()
     var cache = new URLCache
+    var resolver = new DependencyResolver(cache)
     
     def main(args: Array[String]) {
       
@@ -65,15 +65,15 @@ object Main {
 
 		  val urls = resolver.resolveDependencies(m)
 
-		  val unresolvableDependencies = urls.filter(!_._2.isDefined)
+		  val unresolvableDependencies = urls.filter(_._2.isEmpty)
 
 		  if(!unresolvableDependencies.isEmpty){
 			throw new Exception("Unable to resolve dependencies: " + unresolvableDependencies.map(_._1).mkString("\n"))
 		  }
 
-		  val deps = urls.toList.map{t=>
-			val (spec, maybeUrl) = t
-			val file = cache.get(new URL(maybeUrl.get))
+		  val deps = urls.toList.flatMap(_._2).map{t=>
+			val (spec, url) = t
+			val file = cache.get(new URL(url))
 			ResolvedDependency(file, spec)
 		  }
 

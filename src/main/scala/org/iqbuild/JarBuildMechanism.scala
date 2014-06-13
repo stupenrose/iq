@@ -28,6 +28,7 @@ object JarBuild extends BuildMechanism {
         println("Deleting " + stagingDir.getAbsolutePath())
         FileUtils.deleteDirectory(stagingDir)
         stagingDir.mkdirs()
+        FileUtils.write(new File(targetDir, "classpath"), classpath + ":" + productFile.getAbsolutePath())
         
         exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir)
         val contents = Util.find(stagingDir){i=>true}.toList
