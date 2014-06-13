@@ -1,14 +1,30 @@
-build a single jar with 2 java classes
+-- simple happy path --
+[DONE] build a single jar with 2 java classes
+
+-- dependency resolution 1.0 --
+[DONE]build a single jar with multiple, transient dependencies
+build a single jar with multiple, conflicting, transient dependencies
+use http cache headers, HEAD, etc. for cache invalidation
+
+-- maven export --
+configure a module to generate a maven companion pom
+
+-- build more things --
 build a single jar with java classes & static resources
 build a single jar with java classes & jshint
 build a single jar with java classes & jshint & minimization
 build a single jar with java classes & jshint & require.js optimization
 build a single jar with java classes & coffeescript
 build a zip with coffeescript & jshint & minimization
+build a war with java classes, coffeescript, jshint & minimization
 build a single jar with scala classes & static resources
 build a single jar with groovy classes & static resources
 build a single jar with clojure code & static resources
+
+-- build more than one thing at once --
 multiple modules
 multiple modules with interdependencies
+
+-- consume dependencies in interesting ways --
 build a single jar that depends on unpacked zip stuff in the classpath
 

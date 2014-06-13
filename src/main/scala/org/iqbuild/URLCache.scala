@@ -18,7 +18,7 @@ class URLCache(val cache:File = new File(System.getProperty("user.home"), ".iq/c
         
         if(!f.exists()){
         	f.getParentFile().mkdirs()
-        	println("GET " + u)
+        	print("GET " + u + " ...")
         	val client = new HttpClient()
         	val request = new GetMethod(u.toExternalForm())
         	val statusCode = client.executeMethod(request)
@@ -26,7 +26,12 @@ class URLCache(val cache:File = new File(System.getProperty("user.home"), ".iq/c
         		val fout = new FileOutputStream(f)
         		IOUtils.copy(request.getResponseBodyAsStream(), fout)
         		fout.close()
-        	}else throw new RuntimeException("Error " + statusCode + ": " + u)
+        		println("OK")
+        	}else {
+        	  println(" " + statusCode)
+        	  System.out.flush()
+        	  throw new RuntimeException("Error " + statusCode + ": " + u)
+        	}
         	request.releaseConnection()
         }
 	  f

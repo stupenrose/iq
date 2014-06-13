@@ -6,10 +6,10 @@ import java.io.File
 object FSNode {
 	def forPath(p:File, filter:File=>Boolean = {f=>true}):FSNode = {
 		val children = if(p.isDirectory()) p.listFiles().filter(filter).map(forPath(_)).toSeq else Seq[FSNode]()
-		FSNode(p.getAbsolutePath(), new Instant(p.lastModified()), p.isFile(), children)
+		FSNode(p.getAbsolutePath(), p.lastModified(), p.isFile(), children)
 	}
 }
-case class FSNode(path:String, lastModified:Instant, isFile:Boolean, children:Seq[FSNode]) {
+case class FSNode(path:String, lastModified:Long, isFile:Boolean, children:Seq[FSNode]) {
 	def deltas(node:Any):List[(FSNode, FSNode)] = {
 		node match {
 		case n:FSNode => {

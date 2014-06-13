@@ -58,7 +58,7 @@ object Main {
 	  val targetDir = new File(dir, "target")
      
       
-      def doBuild(prev:FSNode, fs:FSNode){
+      def doBuild(maybePrev:Option[FSNode], fs:FSNode){
           val start = System.currentTimeMillis()
           println("Working on " + fs.path)
           
@@ -87,18 +87,25 @@ object Main {
           println("Finished - " + seconds + " seconds")
       }
       
+      var pollingCache = new File(targetDir, "fs.json")
 
-      var prev:FSNode = null
 	  while(true){
 	    
+		  var maybePrev = if (pollingCache.exists()) Some(Jackson.jackson.readValue(pollingCache, classOf[FSNode])) else None 
 		  val fs = FSNode.forPath(dir, {f => f!=targetDir && !f.getName().startsWith(".")})
-		  val deltas = fs.deltas(prev)
-		  if(prev==null || !deltas.isEmpty){
-			  println(s"Something changed: ${deltas}")
+		  val deltas = maybePrev match {
+		    case Some(prev) => fs.deltas(prev)
+		    case None => Seq()
+		  }
+		  
+		  val needsBuild = (maybePrev, deltas) match {
+		    case (None, _) => true
+		    case (_, deltas) if !deltas.isEmpty => {
+		      println(s"Something changed:")
 			  println(deltas.map{beforeAndAfter=>
 			  	val (before, after) = beforeAndAfter
 			  	
-			  	val timeDiff = if(!before.lastModified.isEqual(after.lastModified )){
+			  	val timeDiff = if(before.lastModified != after.lastModified ){
 			  	  before.lastModified + " vs " + after.lastModified
 			  	}else ""
 			  	
@@ -108,15 +115,20 @@ object Main {
 			  	
 			  	before.path + " (" + timeDiff + fileDiff + ")"
 			  }.mkString("    ", "\n    ", "\n"))
-
+		      true
+		    }
+		    case _ => false
+		  }
+		  if(needsBuild){
 			  try{
-				  doBuild(prev, fs)
+				  doBuild(maybePrev, fs)
 			  }catch{
 			  	case e:Throwable=>e.printStackTrace()
 			  }
 
 		  }
-		  prev = fs
+
+		  Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(pollingCache, fs);		  
 		  Thread.sleep(500)
 	  }
       

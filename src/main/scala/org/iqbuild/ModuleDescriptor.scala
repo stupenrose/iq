@@ -42,13 +42,13 @@ object ModuleDescriptor{
       
       val parts = ids.split(":").map(_.trim)
       
-      val module = parts match {
-        case Array("~", a) => ModuleId(id.group, parts(1))
-        case Array(label, "", version) => ModuleId(label, label)
-        case Array(string1, string2) => ModuleId(group=string1, name=string2)
+      val moduleAndVersion = parts match {
+        case Array("~", a) => (ModuleId(id.group, parts(1)), None)
+        case Array(label, "", version) => (ModuleId(label, label), Some(version))
+        case Array(string1, string2) => (ModuleId(group=string1, name=string2), None)
         case _ => throw new Exception("Unable to parse dependency: " + line) 
       }
-      DependencySpec(module=module, inclusion=inclusionSpec)
+      DependencySpec(module=moduleAndVersion._1, version=moduleAndVersion._2, inclusion=inclusionSpec)
     }
     
     val build = lines.find(_.startsWith("build ")).get.substring("build ".length)
