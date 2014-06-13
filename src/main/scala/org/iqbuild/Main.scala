@@ -12,6 +12,7 @@ import org.apache.commons.httpclient.HttpClient
 import org.apache.commons.httpclient.methods.GetMethod
 import java.io.FileOutputStream
 import org.apache.commons.io.FileUtils
+import org.joda.time.Instant
 
 object Main {
   /*
@@ -24,16 +25,44 @@ object Main {
   
     trait BuildMechanism {
       
-      def build(path:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor)
+      def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor)
     }
     
+    object FSNode {
+      def forPath(p:File, filter:File=>Boolean = {f=>true}):FSNode = {
+        
+        val children = if(p.isDirectory()) p.listFiles().filter(filter).map(forPath(_)).toSeq else Seq[FSNode]()
+        FSNode(p.getAbsolutePath(), new Instant(p.lastModified()), p.isFile(), children)
+      }
+    }
+    case class FSNode(path:String, lastModified:Instant, isFile:Boolean, children:Seq[FSNode]) {
+      override def equals(node:Any) = {
+    	  node match {
+    	    case n:FSNode => {
+    	      
+    	      val childrenMatch = children.zip(n.children ).forall{t=>
+    	        val (a, b) = t
+    	        val m = a == b
+    	        if(!m) System.out.println(s"$a $b $m")
+    	        m
+    	       }
+    	      
+    	      path == n.path  && lastModified == n.lastModified  && isFile == n.isFile && childrenMatch//  && children == n.children 
+    	    } 
+    	    case _ => false
+    	  }
+      }
+    }
+    
+    
+    
     object JarBuild extends BuildMechanism {
-      override def build(path:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor) {
+      override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor) {
+        val path = new File(state.path) 
         val start = System.currentTimeMillis()
         println("Working on " + path.getAbsolutePath())
         val sourceDir = new File(path, "src")
         val javaFiles = new File(sourceDir, "java")
-        val targetDir = new File(path, "target")
         val stagingDir = new File(targetDir, "jar")
         targetDir.mkdirs()
         stagingDir.mkdirs()
@@ -197,8 +226,22 @@ object Main {
         
         ResolvedDependency(path=f, spec=t._1 )
       }
-      
-      buildMechanisms(m.build).build(dir, deps, m)
+
+      var prev:FSNode = null
+	  while(true){
+		  val targetDir = new File(dir, "target")
+		  val fs = FSNode.forPath(dir, {f => f!=targetDir && !f.getName().startsWith(".")})
+		  if(prev==null || fs!=prev){
+			  println("Something changed")
+			  try{
+				buildMechanisms(m.build).build(fs, targetDir, deps, m)
+			  }catch{
+			  	case e:Throwable=>e.printStackTrace()
+			  }
+		  }
+		  prev = fs
+		  Thread.sleep(500)
+	  }
       
     }
     def path(d:File, segments:Seq[String]):File = {
