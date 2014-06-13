@@ -7,8 +7,6 @@ import scala.collection.JavaConversions._
 object JarBuild extends BuildMechanism {
       override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor) {
         val path = new File(state.path) 
-        val start = System.currentTimeMillis()
-        println("Working on " + path.getAbsolutePath())
         val sourceDir = new File(path, "src")
         val javaFiles = new File(sourceDir, "java")
         val stagingDir = new File(targetDir, "jar")
@@ -33,9 +31,7 @@ object JarBuild extends BuildMechanism {
         exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir)
         val contents = Util.find(stagingDir){i=>true}.toList
         exec(List("jar", "-cvf", productFile.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir)
-        val end = System.currentTimeMillis()
-        val seconds = (end - start) /1000.0
-        println("Finished - " + seconds + " seconds")
+
       }
 
       private def relativePath(child:File, parent:File) = {

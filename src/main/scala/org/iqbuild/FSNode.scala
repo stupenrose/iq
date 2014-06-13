@@ -22,7 +22,7 @@ case class FSNode(path:String, lastModified:Instant, isFile:Boolean, children:Se
 			val imUnchanged = path == n.path  && lastModified == n.lastModified  && isFile == n.isFile
 			
 			val changes = if(!imUnchanged){
-			  println("I changed: " + this)
+//			  println("I changed: " + this)
 			  List((this, n))
 			}else {
 			  List()

@@ -59,6 +59,9 @@ object Main {
      
       
       def doBuild(prev:FSNode, fs:FSNode){
+          val start = System.currentTimeMillis()
+          println("Working on " + fs.path)
+          
           val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
 		  val m = ModuleDescriptor.parse(text)
 		  println("reading " + m.id)
@@ -78,6 +81,10 @@ object Main {
 		  }
 
           buildMechanisms(m.build).build(fs, targetDir, deps, m)
+          
+          val end = System.currentTimeMillis()
+          val seconds = (end - start) /1000.0
+          println("Finished - " + seconds + " seconds")
       }
       
 
