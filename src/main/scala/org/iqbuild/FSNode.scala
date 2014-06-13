@@ -10,20 +10,27 @@ object FSNode {
 	}
 }
 case class FSNode(path:String, lastModified:Instant, isFile:Boolean, children:Seq[FSNode]) {
-	override def equals(node:Any) = {
+	def deltas(node:Any):List[(FSNode, FSNode)] = {
 		node match {
 		case n:FSNode => {
 
-			val childrenMatch = children.zip(n.children ).forall{t=>
-			val (a, b) = t
-			val m = a == b
-			if(!m) System.out.println(s"$a $b $m")
-			m
-			}
+			val childDeltas = children.zip(n.children ).flatMap{t=>
+				val (a, b) = t
+				a.deltas(b)
+			}.toList
 
-			path == n.path  && lastModified == n.lastModified  && isFile == n.isFile && childrenMatch//  && children == n.children 
+			val imUnchanged = path == n.path  && lastModified == n.lastModified  && isFile == n.isFile
+			
+			val changes = if(!imUnchanged){
+			  println("I changed: " + this)
+			  List((this, n))
+			}else {
+			  List()
+			}
+			
+			changes ::: childDeltas
 		} 
-		case _ => false
+		case _ => List()
 		}
 	}
 }

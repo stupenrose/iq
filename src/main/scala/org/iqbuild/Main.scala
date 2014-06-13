@@ -55,38 +55,59 @@ object Main {
       
       val moduleDescriptorFile = new File(args(0))
       val dir = moduleDescriptorFile.getParentFile() 
-      val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
-      val m = ModuleDescriptor.parse(text)
-      println("reading " + m.id)
+	  val targetDir = new File(dir, "target")
+     
       
-      val urls = resolver.resolveDependencies(m)
-      
-      println(urls.mkString("\n"))
-      
-      val unresolvableDependencies = urls.filter(!_._2.isDefined)
-      
-      if(!unresolvableDependencies.isEmpty){
-        throw new Exception("Unable to resolve dependencies: " + unresolvableDependencies.map(_._1).mkString("\n"))
+      def doBuild(prev:FSNode, fs:FSNode){
+          val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
+		  val m = ModuleDescriptor.parse(text)
+		  println("reading " + m.id)
+
+		  val urls = resolver.resolveDependencies(m)
+
+		  val unresolvableDependencies = urls.filter(!_._2.isDefined)
+
+		  if(!unresolvableDependencies.isEmpty){
+			throw new Exception("Unable to resolve dependencies: " + unresolvableDependencies.map(_._1).mkString("\n"))
+		  }
+
+		  val deps = urls.toList.map{t=>
+			val (spec, maybeUrl) = t
+			val file = cache.get(new URL(maybeUrl.get))
+			ResolvedDependency(file, spec)
+		  }
+
+          buildMechanisms(m.build).build(fs, targetDir, deps, m)
       }
       
-      
-      val deps = urls.toList.map{t=>
-        val (spec, maybeUrl) = t
-        val file = cache.get(new URL(maybeUrl.get))
-        ResolvedDependency(file, spec)
-      }
 
       var prev:FSNode = null
 	  while(true){
-		  val targetDir = new File(dir, "target")
+	    
 		  val fs = FSNode.forPath(dir, {f => f!=targetDir && !f.getName().startsWith(".")})
-		  if(prev==null || fs!=prev){
-			  println("Something changed")
+		  val deltas = fs.deltas(prev)
+		  if(prev==null || !deltas.isEmpty){
+			  println(s"Something changed: ${deltas}")
+			  println(deltas.map{beforeAndAfter=>
+			  	val (before, after) = beforeAndAfter
+			  	
+			  	val timeDiff = if(!before.lastModified.isEqual(after.lastModified )){
+			  	  before.lastModified + " vs " + after.lastModified
+			  	}else ""
+			  	
+			  	val fileDiff = if(before.isFile!=after.isFile ){
+			  	  before.isFile  + " vs " + after.isFile
+			  	}else ""
+			  	
+			  	before.path + " (" + timeDiff + fileDiff + ")"
+			  }.mkString("    ", "\n    ", "\n"))
+
 			  try{
-				buildMechanisms(m.build).build(fs, targetDir, deps, m)
+				  doBuild(prev, fs)
 			  }catch{
 			  	case e:Throwable=>e.printStackTrace()
 			  }
+
 		  }
 		  prev = fs
 		  Thread.sleep(500)
