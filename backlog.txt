@@ -2,8 +2,8 @@
 [DONE] build a single jar with 2 java classes
 
 -- dependency resolution 1.0 --
-[DONE]build a single jar with multiple, transient dependencies
-build a single jar with multiple, conflicting, transient dependencies
+[DONE] build a single jar with multiple, transient dependencies
+[DONE] build a single jar with multiple, conflicting, transient dependencies
 use http cache headers, HEAD, etc. for cache invalidation
 
 -- maven export --

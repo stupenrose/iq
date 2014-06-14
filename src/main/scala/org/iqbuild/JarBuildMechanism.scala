@@ -3,6 +3,7 @@ package org.iqbuild
 import java.io.File
 import org.apache.commons.io.FileUtils
 import scala.collection.JavaConversions._
+import java.net.URL
 
 object JarBuild extends BuildMechanism {
       override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor) {
@@ -13,13 +14,19 @@ object JarBuild extends BuildMechanism {
         targetDir.mkdirs()
         stagingDir.mkdirs()
         
+        println("scanning")
         val files = Util.find(sourceDir)(_.getName().endsWith(".java")).toList
+        
+        println("done scanning")
         
         files.foreach(println)
         println("foo " + path);
         
         
-        val classpath = dependencies.map(_.path .getAbsolutePath()).mkString(":")
+        val cache = new URLCache()
+        
+        val dependenciesOnDisk = dependencies.map{d=>cache.get(new URL(d.url))}
+        val classpath = dependenciesOnDisk.map(_.getAbsolutePath()).mkString(":")
         
         val productFile = new File(targetDir, "product.jar")
         

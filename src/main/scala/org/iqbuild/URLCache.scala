@@ -1,18 +1,18 @@
 package org.iqbuild
 
-import java.net.URL
 import java.io.File
+import java.net.URL
 import org.apache.commons.httpclient.HttpClient
 import org.apache.commons.httpclient.methods.GetMethod
 import java.io.FileOutputStream
 import org.apache.commons.io.IOUtils
 
-class URLCache(val cache:File = new File(System.getProperty("user.home"), ".iq/cache")) {
+class URLCache(val cache:File = new File(System.getProperty("user.home"), ".iq/cache")) extends HttpFetcher {
   
     cache.mkdirs()
       
-	def get(u:URL):File = {
-	  val x = u.getProtocol() + "_" + u.getHost() + "_" + (if(u.getPort() == -1) "" else u.getPort())
+  override def get(u:URL):File = {
+    val x = u.getProtocol() + "_" + u.getHost() + "_" + (if(u.getPort() == -1) "" else u.getPort())
         val q = List(x) ::: u.getPath().split("/").toList
         val f = Util.path(cache, q)
         
@@ -34,6 +34,6 @@ class URLCache(val cache:File = new File(System.getProperty("user.home"), ".iq/c
         	}
         	request.releaseConnection()
         }
-	  f
-	}
+    f
+  }
 }

@@ -28,8 +28,8 @@ object Main {
     case class ModuleWorkingInfo (descriptor:Timestamped[ModuleDescriptor])
     
     
-    var cache = new URLCache
-    var resolver = new DependencyResolver(cache)
+    val cache = new URLCache
+    val resolver = new DependencyResolver(cache)
     
     def main(args: Array[String]) {
       
@@ -59,39 +59,35 @@ object Main {
      
       
       def doBuild(maybePrev:Option[FSNode], fs:FSNode){
-          val start = System.currentTimeMillis()
-          println("Working on " + fs.path)
+    
+        val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
+        val m = ModuleDescriptor.parse(text)
+        val label = m.id
+        
+        val dependencyTree = time("Resolving dependencies for " + label){
+		  
+		  
+		  resolver.resolveDependencies(m)
+        }
+        
+        val dependencies = time("processing dependency tree"){
+          dependencyTree.flatten
+        }
+        
+        time("building " + label){
+        	val buildMechanism = buildMechanisms(m.build)
+        			
+        	
+			buildMechanism.build(fs, targetDir, dependencies, m)
+        }
           
-          val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
-		  val m = ModuleDescriptor.parse(text)
-		  println("reading " + m.id)
-
-		  val urls = resolver.resolveDependencies(m)
-
-		  val unresolvableDependencies = urls.filter(_._2.isEmpty)
-
-		  if(!unresolvableDependencies.isEmpty){
-			throw new Exception("Unable to resolve dependencies: " + unresolvableDependencies.map(_._1).mkString("\n"))
-		  }
-
-		  val deps = urls.toList.flatMap(_._2).map{t=>
-			val (spec, url) = t
-			val file = cache.get(new URL(url))
-			ResolvedDependency(file, spec)
-		  }
-
-          buildMechanisms(m.build).build(fs, targetDir, deps, m)
-          
-          val end = System.currentTimeMillis()
-          val seconds = (end - start) /1000.0
-          println("Finished - " + seconds + " seconds")
       }
       
-      var pollingCache = new File(targetDir, "fs.json")
+      val pollingCache = new File(targetDir, "fs.json")
 
 	  while(true){
 	    
-		  var maybePrev = if (pollingCache.exists()) Some(Jackson.jackson.readValue(pollingCache, classOf[FSNode])) else None 
+		  val maybePrev = if (pollingCache.exists()) Some(Jackson.jackson.readValue(pollingCache, classOf[FSNode])) else None 
 		  val fs = FSNode.forPath(dir, {f => f!=targetDir && !f.getName().startsWith(".")})
 		  val deltas = maybePrev match {
 		    case Some(prev) => fs.deltas(prev)
@@ -133,4 +129,15 @@ object Main {
 	  }
       
     }
+    
+    private def time[T](name:String)(fn: =>T):T = {
+        val start = System.currentTimeMillis()
+        println(name)
+        val t = fn
+        val end = System.currentTimeMillis()
+        val seconds = (end - start) /1000.0
+        println("Finished - " + seconds + " seconds")
+        t
+    }
+      
 }

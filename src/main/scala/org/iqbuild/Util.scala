@@ -6,6 +6,9 @@ import org.apache.commons.io.IOUtils
 import java.io.File
 
 object Util {
+    def makeArtifactUrl(mavenCentral:String, groupId:String, artifactId:String) = mavenCentral + groupId.replaceAllLiterally(".", "/") + "/" + artifactId
+    def makePomUrl(mavenCentral:String, groupId:String, artifactId:String, version:String) = makeArtifactUrl(mavenCentral, groupId , artifactId) + "/" + version + "/" + artifactId + "-" + version + ".pom"
+        
     def copy(i:InputStream, o:OutputStream) {
       new Thread(){
         override def run(){

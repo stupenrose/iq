@@ -23,13 +23,11 @@ class ModuleDescriptorTest extends FunSuite {
      val m = ModuleDescriptor.parse(text)
 
      // then
-    println(ModuleId(group="us.penrose", name="myapp"))
-    println(m.id)
      assert(ModuleId(group="us.penrose", name="myapp") === m.id)
      assert("jar" === m.build)
      assert(4 === m.deps.size)
      assert(DependencySpec(module=ModuleId(group="us.penrose", name="mylibA")) === m.deps(0))
-     assert(DependencySpec(module=ModuleId(group="commons-lang", name="commons-lang")) === m.deps(1))
+     assert(DependencySpec(module=ModuleId(group="commons-lang", name="commons-lang"), version=Some("1.2.2")) === m.deps(1))
      assert(DependencySpec(module=ModuleId(group="us.penrose", name="htmldocs"), inclusion=Some("unzipped")) === m.deps(2))
      assert(DependencySpec(module=ModuleId(group="org.codehaus.mojo", name="animal-sniffer-maven-plugin")) === m.deps(3))
   }
