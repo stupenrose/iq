@@ -6,7 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>cli</artifactId>
+    <groupId>org.iqbuild.util</groupId>
+    <artifactId>util</artifactId>
 
     <build>
         <sourceDirectory>src/main/scala</sourceDirectory>
@@ -31,32 +32,6 @@
                     <source>1.6</source>
                     <target>1.6</target>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>org.iqbuild.cli.Main</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>com.jolira</groupId>
-                <artifactId>onejar-maven-plugin</artifactId>
-                <version>1.4.4</version>
-                <executions>
-                    <execution>
-                        <configuration>
-                            <attachToBuild>true</attachToBuild>
-                        </configuration>
-                        <goals>
-                            <goal>one-jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <!-- disable surefire -->
             <plugin>
@@ -89,16 +64,6 @@
         </plugins>
     </build>
     <dependencies>
-	<dependency>
-	    <groupId>org.iqbuild</groupId>
-	    <version>0.0.1-SNAPSHOT</version> 
-	    <artifactId>process-tree</artifactId>
-	</dependency>
-   	<dependency>
-	    <groupId>org.iqbuild.util</groupId>
-	    <artifactId>util</artifactId>
-	    <version>${pom.version}</version>
-	</dependency>
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>

@@ -5,6 +5,7 @@ import org.apache.commons.io.FileUtils
 import scala.collection.JavaConversions._
 import java.net.URL
 import java.io.PrintStream
+import org.iqbuild.util.Util
 
 object JarBuild extends BuildMechanism {
       override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, out:PrintStream) {

@@ -87,6 +87,12 @@ object Main {
     	  	  get(req)
     	  	}
           },
+          new HttpObject("/nextBuild"){
+            override def get(req:Request) = {
+            	Main.synchronized(Main.wait())
+            	OK(Text("done"))
+            }
+          },
           new HttpObject("/log"){
             override def get(req:Request) = {
               OK(new Representation(){
@@ -179,10 +185,11 @@ object Main {
 			  }catch{
 			  	case e:Throwable=>e.printStackTrace()
 			  }
-
+			  Main.synchronized(Main.notifyAll)
 		  }
 
-		  Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(pollingCache, fs);		  
+		  Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(pollingCache, fs);	
+		  
 		  Thread.sleep(500)
 	  }
       

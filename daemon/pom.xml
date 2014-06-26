@@ -93,6 +93,11 @@
         </plugins>
     </build>
     <dependencies>
+   		<dependency>
+	        <groupId>org.iqbuild.util</groupId>
+	        <artifactId>util</artifactId>
+	        <version>${pom.version}</version>
+	    </dependency>
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>

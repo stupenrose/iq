@@ -1,9 +1,10 @@
-package org.iqbuild
+package org.iqbuild.util
 
 import java.io.InputStream
 import java.io.OutputStream
 import org.apache.commons.io.IOUtils
 import java.io.File
+import java.io.PrintStream
 
 object Util {
     def makeArtifactUrl(mavenCentral:String, groupId:String, artifactId:String) = mavenCentral + groupId.replaceAllLiterally(".", "/") + "/" + artifactId
@@ -36,4 +37,21 @@ object Util {
           path(new File(d, segments.head), segments.tail)
         }
       }
+    
+    def exec(cmd: Seq[String], dir:File, out:PrintStream = System.out, err:PrintStream = System.err): Unit = {
+        out.println(cmd.mkString(" "))
+        
+        val p = new ProcessBuilder().directory(dir).command(cmd :_*).start()
+        
+        watchProc(p, out, err)
+    }
+    
+    def watchProc(p:Process, out:PrintStream = System.out, err:PrintStream = System.err): Unit = {
+        Util.copy(p.getInputStream(), out)
+        Util.copy(p.getErrorStream(), err)
+        
+        val result = p.waitFor()
+        if(result!=0)
+        	throw new RuntimeException("Exit " + result)
+    }
 }

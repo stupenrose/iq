@@ -5,6 +5,7 @@ import scala.xml.XML
 import scala.xml.Elem
 import scala.collection.mutable.ListBuffer
 import org.iqbuild.maven._
+import org.iqbuild.util.Util
 
 class MavenMetadata(mavenCentral:String, group:String, artifactId:String, cache:HttpFetcher) {
   val metadataUrl = Util.makeArtifactUrl(mavenCentral, group , artifactId ) + "/maven-metadata.xml"

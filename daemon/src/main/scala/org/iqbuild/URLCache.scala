@@ -6,6 +6,7 @@ import org.apache.commons.httpclient.HttpClient
 import org.apache.commons.httpclient.methods.GetMethod
 import java.io.FileOutputStream
 import org.apache.commons.io.IOUtils
+import org.iqbuild.util.Util
 
 class URLCache(val cache:File = new File(System.getProperty("user.home"), ".iq/cache")) extends HttpFetcher {
   

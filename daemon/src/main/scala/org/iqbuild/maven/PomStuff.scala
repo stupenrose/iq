@@ -2,7 +2,7 @@ package org.iqbuild.maven
 
 import java.net.URL
 import scala.xml.NodeSeq
-import org.iqbuild.Util
+import org.iqbuild.util.Util
 import org.iqbuild.ModuleId
 import org.iqbuild.HttpFetcher
 import scala.xml.parsing.XhtmlParser
