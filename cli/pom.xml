@@ -6,12 +6,8 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>daemon</artifactId>
+    <artifactId>cli</artifactId>
 
-    <properties>
-        <jackson-version>2.4.0-rc2</jackson-version>
-    </properties>
-    
     <build>
         <sourceDirectory>src/main/scala</sourceDirectory>
         <testSourceDirectory>src/test/scala</testSourceDirectory>
@@ -42,7 +38,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>org.iqbuild.Main</mainClass>
+                            <mainClass>org.iqbuild.cli.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -123,41 +119,6 @@
         	<groupId>joda-time</groupId>
         	<artifactId>joda-time</artifactId>
         	<version>2.3</version>
-        </dependency>
-                <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-annotations</artifactId>
-            <version>${jackson-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-core</artifactId>
-            <version>${jackson-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.module</groupId>
-            <artifactId>jackson-module-scala_2.11</artifactId>
-            <version>${jackson-version}</version>
-        </dependency>
-        <dependency>
-          <groupId>ant</groupId>
-          <artifactId>ant</artifactId>
-           <version>1.6.2</version>
-        </dependency>
-        <dependency>
-        	<groupId>org.apache.maven</groupId>
-        	<artifactId>maven-model</artifactId>
-        	<version>2.0.9</version>
-        </dependency>
-        <dependency>
-        	<groupId>org.httpobjects.jetty</groupId>
-        	<artifactId>httpobjects-jetty-7-and-8</artifactId>
-        	<version>0.5.0</version>
         </dependency>
     </dependencies>
 </project>

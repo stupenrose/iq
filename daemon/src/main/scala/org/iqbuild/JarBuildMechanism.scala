@@ -4,9 +4,10 @@ import java.io.File
 import org.apache.commons.io.FileUtils
 import scala.collection.JavaConversions._
 import java.net.URL
+import java.io.PrintStream
 
 object JarBuild extends BuildMechanism {
-      override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor) {
+      override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, out:PrintStream) {
         val path = new File(state.path) 
         val sourceDir = new File(path, "src")
         val javaFiles = new File(sourceDir, "java")
@@ -14,17 +15,17 @@ object JarBuild extends BuildMechanism {
         targetDir.mkdirs()
         stagingDir.mkdirs()
         
-        println("scanning")
+        out.println("scanning")
         
         val files = Util.find(sourceDir){path=>
           val name = path.getName()
           path.isDirectory() || name.endsWith(".java")
         }.toList
         
-        println("done scanning")
+        out.println("done scanning")
         
         files.foreach(println)
-        println("foo " + path);
+        out.println("foo " + path);
         
         
         val cache = new URLCache()
@@ -34,14 +35,14 @@ object JarBuild extends BuildMechanism {
         
         val productFile = new File(targetDir, "product.jar")
         
-        println("Deleting " + stagingDir.getAbsolutePath())
+        out.println("Deleting " + stagingDir.getAbsolutePath())
         FileUtils.deleteDirectory(stagingDir)
         stagingDir.mkdirs()
         FileUtils.write(new File(targetDir, "classpath"), classpath + ":" + productFile.getAbsolutePath())
         
-        exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir)
+        exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir, out, out)
         val contents = Util.find(stagingDir){i=>true}.toList
-        exec(List("jar", "-cvf", productFile.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir)
+        exec(List("jar", "-cvf", productFile.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir, out, out)
 
       }
 
@@ -54,15 +55,15 @@ object JarBuild extends BuildMechanism {
           throw new RuntimeException()
       }
       
-      private def exec(cmd: Seq[String], dir:File): Unit = {
-        println(cmd.mkString(" "))
+      private def exec(cmd: Seq[String], dir:File, out:PrintStream = System.out, err:PrintStream = System.err): Unit = {
+        out.println(cmd.mkString(" "))
         
         
         
         val p = new ProcessBuilder().directory(dir).command(cmd.toList).start()
         
-        Util.copy(p.getInputStream(), System.out)
-        Util.copy(p.getErrorStream(), System.err)
+        Util.copy(p.getInputStream(), out)
+        Util.copy(p.getErrorStream(), err)
         
         val result = p.waitFor()
         if(result!=0)

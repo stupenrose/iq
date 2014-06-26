@@ -13,25 +13,23 @@ import org.apache.commons.httpclient.methods.GetMethod
 import java.io.FileOutputStream
 import org.apache.commons.io.FileUtils
 import org.joda.time.Instant
+import org.httpobjects.jetty.HttpObjectsJettyHandler
+import org.httpobjects.HttpObject
+import org.httpobjects.Request
+import org.httpobjects.DSL._
+import org.httpobjects.util.HttpObjectUtil
+import java.io.PrintStream
+import java.io.ByteArrayOutputStream
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
+import java.io.FileInputStream
+import org.httpobjects.Representation
 
 object Main {
-  /*
-   * 1 - what am I building?
-   *    - jar
-   *    - war
-   * 2 - what are my dependencies?
-   * 3 - how do I consume each dependency?
-   */
-  
-    case class Timestamped[T](lastModified:Long, item:T)
-    
-    case class ModuleWorkingInfo (descriptor:Timestamped[ModuleDescriptor])
-    
-    
     val cache = new URLCache
     val resolver = new DependencyResolver(cache)
     
-    def main(args: Array[String]) {
+    def main(whatever: Array[String]) {
       
       def findDir(f:File):File = {
         val candidate = new File(f, ".iq")
@@ -47,13 +45,75 @@ object Main {
       val iqDir = findDir(new File(System.getProperty("user.dir")))
       println("iqd - starting-up (" + iqDir.getAbsolutePath() + ")")
       
+      val dataFilePath = new File(iqDir, "data.json")
+      var data = if(dataFilePath.exists()){
+        Jackson.parseJson[Data](dataFilePath)
+      }else{
+        Data()
+      }
+      
+      val logPath = new File(iqDir, "log")
+      val bytesOut = new FileOutputStream(logPath)
+      val out = new PrintStream(bytesOut)
+      
       val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
       
-      // read the cache from ~/.iq/data
-      // setup command socket <- 'iq' client instances communicate with this
-      // enter watch/build loop
+      data.moduleDescriptors.foreach{moduleDescriptorPath=>
+        new Thread(){
+          override def run = {
+        		  watchAndBuild(moduleDescriptorPath, buildMechanisms, out)
+          }
+        }.start()
+      }
       
-      val moduleDescriptorFile = new File(args(0))
+      HttpObjectsJettyHandler.launchServer(33421, 
+          new HttpObject("/"){
+    	  	override def get(req:Request) = OK(Html(
+    	  	    <html>
+    	  		  <body>
+    	  				<h1>iqbuild [{iqDir.getAbsolutePath}]</h1>
+    	  				{data.moduleDescriptors.map{f=>
+    	  				  	<div>{f}</div>
+    	  				}}
+    	  		  </body>
+    	  	    </html>.toString
+    	  	))
+          },
+          new HttpObject("/modules"){
+    	  	override def post(req:Request) = {
+    	  	  val path = HttpObjectUtil.toAscii(req.representation())
+    	  	  data = data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path)
+    	  	  Jackson.jackson .writeValue(dataFilePath, data)
+    	  	  get(req)
+    	  	}
+          },
+          new HttpObject("/log"){
+            override def get(req:Request) = {
+              OK(new Representation(){
+                override def contentType = "text/plain"
+                override def write(out:OutputStream) {
+                  val in = new FileInputStream(logPath)
+                  
+                  while(true){
+                    val x = in.read()
+                    x match {
+                      case -1 => Thread.sleep(100)
+                      case _=> {
+                        out.write(x)
+                        out.flush()
+                      }
+                    }
+                  }
+                }
+              })
+            }
+          }
+      )
+    }
+    
+    def watchAndBuild(moduleDescriptorPath:String, buildMechanisms:Map[String, BuildMechanism], out:PrintStream){
+      println("Found module: " + moduleDescriptorPath)
+      val moduleDescriptorFile = new File(moduleDescriptorPath)
       val dir = moduleDescriptorFile.getParentFile() 
 	  val targetDir = new File(dir, "target")
      
@@ -64,19 +124,19 @@ object Main {
         val m = ModuleDescriptor.parse(text)
         val label = m.id
         
-        val dependencyTree = time("Resolving dependencies for " + label){
+        val dependencyTree = time("Resolving dependencies for " + label, out){
 		  resolver.resolveDependencies(m)
         }
         
-        val dependencies = time("processing dependency tree"){
+        val dependencies = time("processing dependency tree", out){
           dependencyTree.flatten
         }
         
-        time("building " + label){
+        time("building " + label, out){
         	val buildMechanism = buildMechanisms(m.build)
         			
         	
-			buildMechanism.build(fs, targetDir, dependencies, m)
+			buildMechanism.build(fs, targetDir, dependencies, m, out)
         }
           
       }
@@ -95,8 +155,8 @@ object Main {
 		  val needsBuild = (maybePrev, deltas) match {
 		    case (None, _) => true
 		    case (_, deltas) if !deltas.isEmpty => {
-		      println(s"Something changed:")
-			  println(deltas.map{beforeAndAfter=>
+		      out.println(s"Something changed:")
+			  out.println(deltas.map{beforeAndAfter=>
 			  	val (before, after) = beforeAndAfter
 			  	
 			  	val timeDiff = if(before.lastModified != after.lastModified ){
@@ -128,13 +188,13 @@ object Main {
       
     }
     
-    private def time[T](name:String)(fn: =>T):T = {
+    private def time[T](name:String, out:PrintStream)(fn: =>T):T = {
         val start = System.currentTimeMillis()
-        println(name)
+        out.println(name)
         val t = fn
         val end = System.currentTimeMillis()
         val seconds = (end - start) /1000.0
-        println("Finished - " + seconds + " seconds")
+        out.println("Finished - " + seconds + " seconds")
         t
     }
       
