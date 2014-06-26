@@ -15,7 +15,11 @@ object JarBuild extends BuildMechanism {
         stagingDir.mkdirs()
         
         println("scanning")
-        val files = Util.find(sourceDir)(_.getName().endsWith(".java")).toList
+        
+        val files = Util.find(sourceDir){path=>
+          val name = path.getName()
+          path.isDirectory() || name.endsWith(".java")
+        }.toList
         
         println("done scanning")
         

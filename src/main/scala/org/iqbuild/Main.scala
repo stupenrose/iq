@@ -65,8 +65,6 @@ object Main {
         val label = m.id
         
         val dependencyTree = time("Resolving dependencies for " + label){
-		  
-		  
 		  resolver.resolveDependencies(m)
         }
         
