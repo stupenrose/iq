@@ -4,10 +4,20 @@
 -- dependency resolution 1.0 --
 [DONE] build a single jar with multiple, transient dependencies
 [DONE] build a single jar with multiple, conflicting, transient dependencies
-use http cache headers, HEAD, etc. for cache invalidation
 
--- maven export --
-configure a module to generate a maven companion pom
+user sees streaming output from his app when using watchrun
+
+-- build more than one thing at once --
+multiple modules
+   - [DONE] user adds module using cli tool
+   - user unregisters module using cli tool
+multiple modules with interdependencies
+
+-- chain code transformers --
+add a simple code templater to the mix of a java project - develop a generic api for standard transformers
+
+-- dependency caching 2.0 --
+use http cache headers, HEAD, etc. for cache invalidation
 
 -- build more things --
 build a single jar with java classes & static resources
@@ -21,9 +31,8 @@ build a single jar with scala classes & static resources
 build a single jar with groovy classes & static resources
 build a single jar with clojure code & static resources
 
--- build more than one thing at once --
-multiple modules
-multiple modules with interdependencies
+-- maven export --
+configure a module to generate a maven companion pom
 
 -- consume dependencies in interesting ways --
 build a single jar that depends on unpacked zip stuff in the classpath

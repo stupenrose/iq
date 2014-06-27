@@ -13,15 +13,38 @@ import java.io.InputStream
 import java.io.ByteArrayOutputStream
 import hudson.util.ProcessTree
 import scala.collection.JavaConversions._
+import org.apache.commons.httpclient.methods.PostMethod
+import org.apache.commons.httpclient.methods.DeleteMethod
 
 object Main {
+    val BASE_URL = "http://localhost:33421"
+ 
 	def main(args: Array[String]) {
         val command = args(0)
         
         command match {
           case "tail" => tail()
           case "watchrun" => watchRun(args.tail)
+          case "web" => openWebUI()
+          case "include" => include(new File(args(1)).getAbsolutePath())
         }
+	}
+    
+	def include(path:String) {
+        val client = new HttpClient
+	    val request = new PostMethod(BASE_URL + "/modules")
+        request.setRequestBody(path)
+	    val statusCode = client.executeMethod(request)
+	    
+	    val text = request.getResponseBodyAsString()
+	    request.releaseConnection()
+	    
+	    if(statusCode!=200) 
+	      throw new RuntimeException("error " + statusCode + ":\n" + text)
+	    
+	}
+	def openWebUI() {
+	  Runtime.getRuntime().exec(Array("gnome-open", BASE_URL));
 	}
 	
 	def watchRun(cmd:Seq[String]){
@@ -56,7 +79,7 @@ object Main {
 		    println("Waiting")
 	        
 	        val client = new HttpClient
-		    val request = new GetMethod("http://localhost:33421/nextBuild")
+		    val request = new GetMethod(BASE_URL + "/nextBuild")
 		    client.executeMethod(request)
 		    request.releaseConnection()
 		    
@@ -76,18 +99,21 @@ object Main {
 	
 	private def killRecursivelyAndBlockTillCompletelyDead(p:Process) {
 	  val op = ProcessTree.get().get(p);
-	  op.killRecursively();
-	  p.waitFor()
-	
-	  val pids = List(op.getPid) ::: op.getChildren.map(_.getPid).toList
-	
-	  var isRunning = true;
-	  while(isRunning){
-  	    val procs = pids.map(ProcessTree.get.get(_))
-	    isRunning = procs.forall(_==null)
-	    println("Sleeping (" + procs.mkString("\n") + ")")
-	    Thread.sleep(200)
+	  if(op!=null){
+	      op.killRecursively();
+		  p.waitFor()
+		
+		  val pids = List(op.getPid) ::: op.getChildren.map(_.getPid).toList
+		
+		  var isRunning = true;
+		  while(isRunning){
+	  	    val procs = pids.map(ProcessTree.get.get(_))
+		    isRunning = procs.forall(_==null)
+		    println("Sleeping (" + procs.mkString("\n") + ")")
+		    Thread.sleep(200)
+		  }
 	  }
+	  
 	}
 	
 	def tail(){

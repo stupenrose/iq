@@ -58,12 +58,13 @@ object Main {
       
       val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
       
+      
+      class BuildThread(moduleDescriptorPath:String) extends Thread {
+        override def run = watchAndBuild(moduleDescriptorPath, buildMechanisms, out)
+      }
+      
       data.moduleDescriptors.foreach{moduleDescriptorPath=>
-        new Thread(){
-          override def run = {
-        		  watchAndBuild(moduleDescriptorPath, buildMechanisms, out)
-          }
-        }.start()
+        new BuildThread(moduleDescriptorPath).start()
       }
       
       HttpObjectsJettyHandler.launchServer(33421, 
@@ -82,9 +83,24 @@ object Main {
           new HttpObject("/modules"){
     	  	override def post(req:Request) = {
     	  	  val path = HttpObjectUtil.toAscii(req.representation())
-    	  	  data = data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path)
-    	  	  Jackson.jackson .writeValue(dataFilePath, data)
-    	  	  get(req)
+    	  	  val p = new File(path)
+    	  	  
+    	  	  val maybeDescriptor = try {
+	  	        val text = Source.fromFile(p).getLines.mkString("\n")
+	  	        Some(ModuleDescriptor.parse(text))
+	  	      }catch{
+	  	        case e:Throwable => None
+	  	      }
+    	  	  
+	  	      maybeDescriptor match {
+	  	        case None => BAD_REQUEST(Text("Unable to read/parse descriptor at" + p.getAbsolutePath()))
+	  	        case Some(d) => {
+	    	  	  data = data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path)
+	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
+	    	  	  new BuildThread(path).start()
+	    	  	  OK(Text("Added " + d.id))
+	  	        }
+	  	      }
     	  	}
           },
           new HttpObject("/nextBuild"){
