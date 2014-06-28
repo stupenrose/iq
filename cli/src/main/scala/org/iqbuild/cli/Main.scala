@@ -11,10 +11,11 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.ByteArrayOutputStream
-import hudson.util.ProcessTree
 import scala.collection.JavaConversions._
 import org.apache.commons.httpclient.methods.PostMethod
 import org.apache.commons.httpclient.methods.DeleteMethod
+import java.io.OutputStream
+import hudson.util.ProcessTree
 
 object Main {
     val BASE_URL = "http://localhost:33421"
@@ -48,23 +49,25 @@ object Main {
 	}
 	
 	def watchRun(cmd:Seq[String]){
-	  var p:Process = null
-	  var t:Thread = null
 	  while(true){
 		  println("starting")
 		  
-		  p = new ProcessBuilder().command(cmd :_*).redirectErrorStream(false).start();
+		  val p = new ProcessBuilder().command(cmd :_*).redirectErrorStream(false).start();
 		  
-		  var out = new ByteArrayOutputStream()
-		  def copyAndClose( name:String, o:InputStream){
+		  val out = new ByteArrayOutputStream()
+		  def copyAndClose( name:String, in:InputStream, out:OutputStream){
 		      new Thread(){
 		        
 		        override def run = try {
-			          val bytes = new ByteArrayOutputStream
-			    	  IOUtils.copy(o, bytes)
-			    	  o.close()
-			    	  val text = new String(bytes.toByteArray())
-			          println(name + ": " + text)
+		          def copyByte() = in.read() match {
+	                case -1 => false
+	                case byte:Int => {
+	                  out.write(byte)
+	                  true
+	                }
+	              }
+		          
+		          while(copyByte){} // 
 			    }catch {
 			      case e:Exception => e.printStackTrace()
 			    }
@@ -73,8 +76,8 @@ object Main {
 		      
 		    }
 		    
-		    copyAndClose("stderr", p.getErrorStream())
-		    copyAndClose("stdout", p.getInputStream())
+		    copyAndClose("stderr", p.getErrorStream(), System.err)
+		    copyAndClose("stdout", p.getInputStream(), System.out)
 	        
 		    println("Waiting")
 	        
