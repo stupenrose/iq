@@ -28,9 +28,6 @@ import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
 
 import hudson.EnvVars;
-import hudson.FilePath;
-//import hudson.FilePath;
-import hudson.Util;
 import hudson.remoting.VirtualChannel;
 //import jenkins.model.Jenkins;
 //import hudson.remoting.Callable;
@@ -284,7 +281,7 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
          * Executes a chunk of code at the same machine where this process resides.
          */
         public <T> T act(ProcessCallable<T> callable) throws IOException, InterruptedException {
-            return callable.invoke(this, FilePath.localChannel);
+            return callable.invoke(this, null);
         }
 
         Object writeReplace() {
@@ -329,7 +326,10 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
         T invoke(OSProcess process, VirtualChannel channel) throws IOException;
     }
 
-    
+    private static String fixNull(String s) {
+    	if(s==null)     return "";
+    	else            return s;
+    }
 
     /**
      * Gets the {@link ProcessTree} of the current system
@@ -344,7 +344,7 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
             if(File.pathSeparatorChar==';')
                 return new Windows();
 
-            String os = Util.fixNull(System.getProperty("os.name"));
+            String os = fixNull(System.getProperty("os.name"));
             if(os.equals("Linux"))
                 return new Linux();
             if(os.equals("SunOS"))
