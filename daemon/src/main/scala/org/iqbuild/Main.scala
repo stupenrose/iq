@@ -62,19 +62,153 @@ object Main {
       
       val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
       
-      def newBuildHandler(moduleDescriptorPath:String) = new BuildHandler(moduleDescriptorPath, buildMechanisms, out)
+      case class ModuleStatus(descriptorPath:String, maybeDescriptor:Option[ModuleDescriptor])
       
-      var handlers = (data.moduleDescriptors.map{moduleDescriptorPath=>        
-        val text = Source.fromFile(moduleDescriptorPath).getLines.mkString("\n")
-        val m = ModuleDescriptor.parse(text)
-        val handler = newBuildHandler(moduleDescriptorPath)
+      case class BuildResult(somethingChanged:Boolean, modulesStatus:Seq[ModuleStatus])
+      
+      def buildAsNeeded(moduleDescriptors:Seq[String], prevModulesState:Seq[ModuleStatus]):BuildResult = {
         
-        handler
-      })
+          case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
+            
+           def needsBuild = (maybePrev, deltas) match {
+			    case (None, _) => true
+			    case (_, deltas) if !deltas.isEmpty => {
+			      out.println(s"Something changed:")
+				  out.println(deltas.map{beforeAndAfter=>
+				  	val (before, after) = beforeAndAfter
+				  	
+				  	val timeDiff = if(before.lastModified != after.lastModified ){
+				  	  before.lastModified + " vs " + after.lastModified
+				  	}else ""
+				  	
+				  	val fileDiff = if(before.isFile!=after.isFile ){
+				  	  before.isFile  + " vs " + after.isFile
+				  	}else ""
+				  	
+				  	before.path + " (" + timeDiff + fileDiff + ")"
+				  }.mkString("    ", "\n    ", "\n"))
+			      true
+			    }
+			    case _ => false
+			  }
+            
+          }
+          
+          case class Paths(val descriptorPath:String){
+              val moduleDescriptorFile = new File(descriptorPath)
+		      val dir = moduleDescriptorFile.getParentFile() 
+			  val targetDir = new File(dir, "target")
+              val pollingCache = new File(targetDir, "fs.json")
+          }
+          
+          val fsChanges = moduleDescriptors.map{descriptorPath=>
+              val paths = Paths(descriptorPath)
+	          val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
+			  val fs = FSNode.forPath(paths.dir, {f => f!=paths.targetDir && !f.getName().startsWith(".")})
+			  
+			  val deltas = maybePrev match {
+			    case Some(prev) => fs.deltas(prev)
+			    case None => Seq()
+			  }
+		      Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(paths.pollingCache, fs);
+		      FilesystemChanges(descriptorPath, maybePrev, fs, deltas)
+          }
+          
+          def doBuild(descriptorPath:String, maybePrev:Option[FSNode], fs:FSNode):ModuleStatus = {
+            val paths = Paths(descriptorPath)
+    
+	        val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
+	        val m = ModuleDescriptor.parse(text)
+	        val label = m.id
+	        
+	//        maybeDescriptor = Some(m)
+	        
+	        val dependencyTree = time("Resolving dependencies for " + label, out){
+			  resolver.resolveDependencies(m)
+	        }
+	        
+	        val dependencies = time("processing dependency tree", out){
+	          dependencyTree.flatten
+	        }
+	        
+	        time("building " + label, out){
+	        	val buildMechanism = buildMechanisms(m.build)
+	        			
+	        	
+				buildMechanism.build(fs, paths.targetDir, dependencies, m, out)
+	        }
+			
+	        ModuleStatus(descriptorPath, maybeDescriptor=Some(m))
+	       
+	      }
+          
+		  val results = fsChanges.map{changes=>
+		          val prevState = prevModulesState.find(_.descriptorPath ==changes.descriptorPath)
+		          
+				  val nextState = if(prevState.isDefined && !changes.needsBuild) {
+				    (false, prevState.get)
+				  }else{
+					(true, doBuild(changes.descriptorPath, changes.maybePrev, changes.currentState))
+				  }
+				  
+				  nextState
+				  
+				  
+              // STEP 1: parse all the module descriptors, if able
+//		      case class PathState(val path:String, val maybeDescriptor:Option[ModuleDescriptor])
+//		      
+//		      val paths = data.moduleDescriptors.map{descriptorPath=>
+//		        val maybeDescriptor = try{
+//		          val descriptorFile = new File(descriptorPath)
+//		          val text = Source.fromFile(descriptorFile).getLines.mkString("\n")
+//		          Some(ModuleDescriptor.parse(text))
+//		        }catch{
+//		          case e:Exception => {
+//		            System.err.println("Error reading " + descriptorPath)
+//		            e.printStackTrace(System.err)
+//		            None
+//		          }
+//		        }
+//		        PathState(descriptorPath, maybeDescriptor)
+//		      }
+		      
+		      
+		      // STEP 2: resolve all the module dependencies
+		         // if
+		      
+		      // STEP 3: verify no 'bad' cycles (dependency cycles that will result in build cycles)
+		      
+		      // STEP 4: determine module build order
+		      
+		      // STEP 5: for each moduleInBuildOrder, build
+		//          val result = build(path, moduleDescriptor, prevModuleBuildState, filesystemChanges, dependencyChanges)
+		//          val newModuleState = result.buildState
+		//          val errors = result.errors
+		      
+		      // don't add new paths that are currently invalid?
+		      
+		      // for each existing path
+		      }
+          BuildResult(
+              somethingChanged=results.exists(_._1 ), 
+              modulesStatus = results.map(_._2 ))
+      }
       
-      def handlersByPath(path:String) = handlers.find(_.moduleDescriptorPath == path)
+      var modulesStatus = Seq[ModuleStatus]()
+      new Thread(){
+        override def run = while(true){
+          println("loop")
+          val oldModulesStatus = modulesStatus
+          val result = buildAsNeeded(data.moduleDescriptors, modulesStatus)
+          modulesStatus = result.modulesStatus 
+          if(result.somethingChanged){
+              println("notifying of changes")
+		      Main.synchronized(Main.notifyAll)
+          }
+	      Thread.sleep(200)
+        }
+      }.start();
       
-      handlers.foreach(_.start())
       
       HttpObjectsJettyHandler.launchServer(33421, 
           new HttpObject("/"){
@@ -91,18 +225,18 @@ object Main {
           },
           new HttpObject("/modules"){
     	  	override def get(req:Request) = {
-    	  	  val matchingHandlers = req.query().valueFor("path") match {
-    	  	    case null=>handlers
-    	  	    case p:String=>handlers.filter(_.moduleDescriptorPath ==p)
+    	  	  val matchingModules = req.query().valueFor("path") match {
+    	  	    case null=>modulesStatus
+    	  	    case p:String=>modulesStatus.filter(_.descriptorPath  ==p)
     	  	  }
     	  	  
-    	  	  val results = matchingHandlers.map{handler=>
+    	  	  val results = matchingModules.map{handler=>
     	  	    val id = handler.maybeDescriptor match {
     	  	      case None=>None
     	  	      case Some(descriptor)=>Some(descriptor.id.toString) 
     	  	    }
     	  	    ModuleListItem(
-    	  	        handler.moduleDescriptorPath, id.getOrElse(null))
+    	  	        handler.descriptorPath, id.getOrElse(null))
     	  	  }
     	  	  
     	  	  
@@ -124,9 +258,6 @@ object Main {
 	  	        case Some(d) => {
 	    	  	  data = data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path)
 	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
-	    	  	  val handler = newBuildHandler(path)
-	    	  	  handlers = handlers :+ handler
-	    	  	  handler.start()
 	    	  	  OK(Text("Added " + d.id))
 	  	        }
 	  	      }
@@ -135,7 +266,7 @@ object Main {
           new HttpObject("/modules/{moduleId}"){
     	  	override def get(req:Request) = {
     	  	  val id = req.path().valueFor("moduleId")
-    	  	  val maybeDescriptor = handlers.find(_.maybeDescriptor.get.id.toString == id)
+    	  	  val maybeDescriptor = modulesStatus.find(_.maybeDescriptor.get.id.toString == id)
     	  	  
     	  	  maybeDescriptor match {
     	  	    case None=>NOT_FOUND
@@ -149,11 +280,10 @@ object Main {
     	  	    ModuleId(group = parts(0), name=parts(1))
     	  	  }
     	  	  
-    	  	  handlers.filter(_.maybeDescriptor .isDefined).find(_.maybeDescriptor.get.id == id) match {
+    	  	  modulesStatus.filter(_.maybeDescriptor .isDefined).find(_.maybeDescriptor.get.id == id) match {
     	  	    case None=>NOT_FOUND
     	  	    case Some(handler)=>{
-    	  	      handlers = handlers.filter(_!=handler)
-    	  	      data = data.copy(moduleDescriptors = data.moduleDescriptors.filter(_!=handler.moduleDescriptorPath ))
+    	  	      data = data.copy(moduleDescriptors = data.moduleDescriptors.filter(_!=handler.descriptorPath))
 	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
     	  	      
     	  	      OK(Text("Deleted"))
@@ -191,94 +321,6 @@ object Main {
           }
       )
     }
-    
-    
-    
-  class BuildHandler(val moduleDescriptorPath:String, buildMechanisms:Map[String, BuildMechanism], out:PrintStream) extends Thread {
-    
-    var maybeDescriptor :Option[ModuleDescriptor] = None
-    
-    override def run = {
-      println("Found module: " + moduleDescriptorPath)
-      val moduleDescriptorFile = new File(moduleDescriptorPath)
-      val dir = moduleDescriptorFile.getParentFile() 
-	  val targetDir = new File(dir, "target")
-     
-      
-      
-      def doBuild(maybePrev:Option[FSNode], fs:FSNode){
-    
-        val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
-        val m = ModuleDescriptor.parse(text)
-        val label = m.id
-        
-        maybeDescriptor = Some(m)
-        
-        val dependencyTree = time("Resolving dependencies for " + label, out){
-		  resolver.resolveDependencies(m)
-        }
-        
-        val dependencies = time("processing dependency tree", out){
-          dependencyTree.flatten
-        }
-        
-        time("building " + label, out){
-        	val buildMechanism = buildMechanisms(m.build)
-        			
-        	
-			buildMechanism.build(fs, targetDir, dependencies, m, out)
-        }
-          
-      }
-      
-      val pollingCache = new File(targetDir, "fs.json")
-
-	  while(true){
-	    
-		  val maybePrev = if (pollingCache.exists()) Some(Jackson.jackson.readValue(pollingCache, classOf[FSNode])) else None 
-		  val fs = FSNode.forPath(dir, {f => f!=targetDir && !f.getName().startsWith(".")})
-		  val deltas = maybePrev match {
-		    case Some(prev) => fs.deltas(prev)
-		    case None => Seq()
-		  }
-		  
-		  val needsBuild = (maybePrev, deltas) match {
-		    case (None, _) => true
-		    case (_, deltas) if !deltas.isEmpty => {
-		      out.println(s"Something changed:")
-			  out.println(deltas.map{beforeAndAfter=>
-			  	val (before, after) = beforeAndAfter
-			  	
-			  	val timeDiff = if(before.lastModified != after.lastModified ){
-			  	  before.lastModified + " vs " + after.lastModified
-			  	}else ""
-			  	
-			  	val fileDiff = if(before.isFile!=after.isFile ){
-			  	  before.isFile  + " vs " + after.isFile
-			  	}else ""
-			  	
-			  	before.path + " (" + timeDiff + fileDiff + ")"
-			  }.mkString("    ", "\n    ", "\n"))
-		      true
-		    }
-		    case _ => false
-		  }
-		  if(needsBuild){
-			  try{
-				  doBuild(maybePrev, fs)
-			  }catch{
-			  	case e:Throwable=>e.printStackTrace()
-			  }
-			  Main.synchronized(Main.notifyAll)
-		  }
-
-		  Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(pollingCache, fs);	
-		  
-		  Thread.sleep(500)
-	  }
-      
-    }
-  }
     
     private def time[T](name:String, out:PrintStream)(fn: =>T):T = {
         val start = System.currentTimeMillis()

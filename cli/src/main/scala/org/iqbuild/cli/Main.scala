@@ -152,7 +152,7 @@ object Main {
 		  var isRunning = true;
 		  while(isRunning){
 	  	    val procs = pids.map(ProcessTree.get.get(_))
-		    isRunning = procs.forall(_==null)
+		    isRunning = procs.exists(_!=null)
 		    println("Sleeping (" + procs.mkString("\n") + ")")
 		    Thread.sleep(200)
 		  }
