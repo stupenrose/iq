@@ -8,7 +8,9 @@ object ModuleId {
     
   }
 }
-case class ModuleId (group:String, name:String)
+case class ModuleId (group:String, name:String) {
+  override def toString = group + ":" + name
+}
 
 case class DependencySpec(module:ModuleId, version:Option[String] = None, inclusion:Option[String] = None)
 

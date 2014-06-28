@@ -5,7 +5,7 @@
 [DONE] build a single jar with multiple, transient dependencies
 [DONE] build a single jar with multiple, conflicting, transient dependencies
 
-user sees streaming output from his app when using watchrun
+[DONE] user sees streaming output from his app when using watchrun
 
 -- build more than one thing at once --
 multiple modules

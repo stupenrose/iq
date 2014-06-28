@@ -16,10 +16,13 @@ import org.apache.commons.httpclient.methods.PostMethod
 import org.apache.commons.httpclient.methods.DeleteMethod
 import java.io.OutputStream
 import hudson.util.ProcessTree
+import org.iqbuild.Jackson
 
+case class ModuleListItem (path:String, id:String)
+    
 object Main {
     val BASE_URL = "http://localhost:33421"
- 
+    
 	def main(args: Array[String]) {
         val command = args(0)
         
@@ -28,8 +31,46 @@ object Main {
           case "watchrun" => watchRun(args.tail)
           case "web" => openWebUI()
           case "include" => include(new File(args(1)).getAbsolutePath())
+          case "remove" => remove(new File(args(1)).getAbsolutePath())
         }
 	}
+    def remove(path:String) {
+        val client = new HttpClient
+	    val request = new GetMethod(BASE_URL + "/modules?path=" + path)
+	    val statusCode = client.executeMethod(request)
+	    
+        
+	    val text = request.getResponseBodyAsString()
+	    request.releaseConnection()
+	    
+	    if(statusCode!=200) 
+	      throw new RuntimeException("error " + statusCode + ":\n" + text)
+        
+	    val items = Jackson.jackson.readTree(text).map{node=>
+	      ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
+        }
+        
+        items.find(_.path  == path) match {
+          case None=> println("no module for " + path)
+          case Some(item)=> {
+            val request = new DeleteMethod(BASE_URL + "/modules/" + item.id)
+		    execute(client, request) {statusCode=>
+		      if(statusCode!=200)
+		        throw new Exception(
+		        		"Error " + statusCode + ": (" + request.getURI() + ")\n" + request.getResponseBodyAsString())
+		    }
+          }
+        }
+	}
+    
+    def execute(client:HttpClient, request:org.apache.commons.httpclient.HttpMethod)(fn:Int=>Unit){
+	  val statusCode = client.executeMethod(request)
+      try{
+        fn(statusCode)
+      }finally{
+    	  request.releaseConnection()
+      }
+    }
     
 	def include(path:String) {
         val client = new HttpClient

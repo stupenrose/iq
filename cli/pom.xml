@@ -81,6 +81,11 @@
         </plugins>
     </build>
     <dependencies>
+    <dependency>
+        <groupId>org.iqbuild</groupId>
+		<artifactId>daemon</artifactId>
+        <version>${pom.version}</version>
+    </dependency>
 	<dependency>
 	    <groupId>org.iqbuild</groupId>
 	    <version>0.0.1-SNAPSHOT</version> 

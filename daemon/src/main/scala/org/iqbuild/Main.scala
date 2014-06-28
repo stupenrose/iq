@@ -24,10 +24,14 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.io.FileInputStream
 import org.httpobjects.Representation
+import scala.collection.generic.MutableMapFactory
+import scala.collection.mutable.ListBuffer
 
 object Main {
     val cache = new URLCache
     val resolver = new DependencyResolver(cache)
+    
+    case class ModuleListItem (path:String, id:String)
     
     def main(whatever: Array[String]) {
       
@@ -58,14 +62,19 @@ object Main {
       
       val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
       
+      def newBuildHandler(moduleDescriptorPath:String) = new BuildHandler(moduleDescriptorPath, buildMechanisms, out)
       
-      class BuildThread(moduleDescriptorPath:String) extends Thread {
-        override def run = watchAndBuild(moduleDescriptorPath, buildMechanisms, out)
-      }
+      var handlers = (data.moduleDescriptors.map{moduleDescriptorPath=>        
+        val text = Source.fromFile(moduleDescriptorPath).getLines.mkString("\n")
+        val m = ModuleDescriptor.parse(text)
+        val handler = newBuildHandler(moduleDescriptorPath)
+        
+        handler
+      })
       
-      data.moduleDescriptors.foreach{moduleDescriptorPath=>
-        new BuildThread(moduleDescriptorPath).start()
-      }
+      def handlersByPath(path:String) = handlers.find(_.moduleDescriptorPath == path)
+      
+      handlers.foreach(_.start())
       
       HttpObjectsJettyHandler.launchServer(33421, 
           new HttpObject("/"){
@@ -81,6 +90,24 @@ object Main {
     	  	))
           },
           new HttpObject("/modules"){
+    	  	override def get(req:Request) = {
+    	  	  val matchingHandlers = req.query().valueFor("path") match {
+    	  	    case null=>handlers
+    	  	    case p:String=>handlers.filter(_.moduleDescriptorPath ==p)
+    	  	  }
+    	  	  
+    	  	  val results = matchingHandlers.map{handler=>
+    	  	    val id = handler.maybeDescriptor match {
+    	  	      case None=>None
+    	  	      case Some(descriptor)=>Some(descriptor.id.toString) 
+    	  	    }
+    	  	    ModuleListItem(
+    	  	        handler.moduleDescriptorPath, id.getOrElse(null))
+    	  	  }
+    	  	  
+    	  	  
+    	  	  OK(Json(Jackson.jackson.writerWithDefaultPrettyPrinter().writeValueAsString(results)))
+    	  	}
     	  	override def post(req:Request) = {
     	  	  val path = HttpObjectUtil.toAscii(req.representation())
     	  	  val p = new File(path)
@@ -97,12 +124,44 @@ object Main {
 	  	        case Some(d) => {
 	    	  	  data = data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path)
 	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
-	    	  	  new BuildThread(path).start()
+	    	  	  val handler = newBuildHandler(path)
+	    	  	  handlers = handlers :+ handler
+	    	  	  handler.start()
 	    	  	  OK(Text("Added " + d.id))
 	  	        }
 	  	      }
     	  	}
           },
+          new HttpObject("/modules/{moduleId}"){
+    	  	override def get(req:Request) = {
+    	  	  val id = req.path().valueFor("moduleId")
+    	  	  val maybeDescriptor = handlers.find(_.maybeDescriptor.get.id.toString == id)
+    	  	  
+    	  	  maybeDescriptor match {
+    	  	    case None=>NOT_FOUND
+    	  	    case Some(descriptor)=>OK(Json(Jackson.jackson .writerWithDefaultPrettyPrinter().writeValueAsString(descriptor)))
+    	  	  }
+    	  	}
+    	  	override def delete(req:Request) = {
+    	  	  val idString = req.path().valueFor("moduleId")
+    	  	  val id = {
+    	  	    val parts = idString.split(":")
+    	  	    ModuleId(group = parts(0), name=parts(1))
+    	  	  }
+    	  	  
+    	  	  handlers.filter(_.maybeDescriptor .isDefined).find(_.maybeDescriptor.get.id == id) match {
+    	  	    case None=>NOT_FOUND
+    	  	    case Some(handler)=>{
+    	  	      handlers = handlers.filter(_!=handler)
+    	  	      data = data.copy(moduleDescriptors = data.moduleDescriptors.filter(_!=handler.moduleDescriptorPath ))
+	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
+    	  	      
+    	  	      OK(Text("Deleted"))
+    	  	    }
+    	  	  }
+    	  	}
+    	  	
+    	  },
           new HttpObject("/nextBuild"){
             override def get(req:Request) = {
             	Main.synchronized(Main.wait())
@@ -133,18 +192,27 @@ object Main {
       )
     }
     
-    def watchAndBuild(moduleDescriptorPath:String, buildMechanisms:Map[String, BuildMechanism], out:PrintStream){
+    
+    
+  class BuildHandler(val moduleDescriptorPath:String, buildMechanisms:Map[String, BuildMechanism], out:PrintStream) extends Thread {
+    
+    var maybeDescriptor :Option[ModuleDescriptor] = None
+    
+    override def run = {
       println("Found module: " + moduleDescriptorPath)
       val moduleDescriptorFile = new File(moduleDescriptorPath)
       val dir = moduleDescriptorFile.getParentFile() 
 	  val targetDir = new File(dir, "target")
      
       
+      
       def doBuild(maybePrev:Option[FSNode], fs:FSNode){
     
         val text = Source.fromFile(moduleDescriptorFile).getLines.mkString("\n")
         val m = ModuleDescriptor.parse(text)
         val label = m.id
+        
+        maybeDescriptor = Some(m)
         
         val dependencyTree = time("Resolving dependencies for " + label, out){
 		  resolver.resolveDependencies(m)
@@ -210,6 +278,7 @@ object Main {
 	  }
       
     }
+  }
     
     private def time[T](name:String, out:PrintStream)(fn: =>T):T = {
         val start = System.currentTimeMillis()
