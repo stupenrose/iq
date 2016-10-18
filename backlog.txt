@@ -10,7 +10,7 @@
 -- build more than one thing at once --
 multiple modules
    - [DONE] user adds module using cli tool
-   - user unregisters module using cli tool
+   - [DONE] user unregisters module using cli tool
 multiple modules with interdependencies
 
 -- chain code transformers --

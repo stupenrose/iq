@@ -26,16 +26,21 @@ object Main {
 	def main(args: Array[String]) {
         val command = args(0)
         
-        command match {
-          case "tail" => tail()
-          case "watchrun" => watchRun(args.tail)
-          case "web" => openWebUI()
-          case "include" => include(new File(args(1)).getAbsolutePath())
-          case "remove" => remove(new File(args(1)).getAbsolutePath())
+        val commands = Map(
+          "tail" -> tail _,
+          "watchrun" -> watchRun _,
+          "web" -> openWebUI _,
+          "include" -> include _,
+          "remove" -> remove _)
+          
+        commands.get(command) match {
+          case Some(fn) => fn(args.tail)
+          case None => println(s"""Unknown command: "$command".  Commands I know are:\n    """ + commands.keys.mkString(",\n    "))
         }
 	}
-    def remove(path:String) {
-        val client = new HttpClient
+    def remove(args:Seq[String]) {
+      val path = new File(args(0)).getAbsolutePath()
+      val client = new HttpClient
 	    val request = new GetMethod(BASE_URL + "/modules?path=" + path)
 	    val statusCode = client.executeMethod(request)
 	    
@@ -72,10 +77,11 @@ object Main {
       }
     }
     
-	def include(path:String) {
-        val client = new HttpClient
+	def include(args:Seq[String]) {
+	    val path = new File(args(0)).getAbsolutePath()
+      val client = new HttpClient
 	    val request = new PostMethod(BASE_URL + "/modules")
-        request.setRequestBody(path)
+      request.setRequestBody(path)
 	    val statusCode = client.executeMethod(request)
 	    
 	    val text = request.getResponseBodyAsString()
@@ -85,7 +91,7 @@ object Main {
 	      throw new RuntimeException("error " + statusCode + ":\n" + text)
 	    
 	}
-	def openWebUI() {
+	def openWebUI(args:Seq[String]) {
 	  Runtime.getRuntime().exec(Array("gnome-open", BASE_URL));
 	}
 	
@@ -160,7 +166,7 @@ object Main {
 	  
 	}
 	
-	def tail(){
+	def tail(args:Seq[String]){
 	  val client = new HttpClient
 	  val request = new GetMethod("http://localhost:33421/log")
 	  client.executeMethod(request) match {
