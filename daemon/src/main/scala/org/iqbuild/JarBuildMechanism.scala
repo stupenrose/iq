@@ -41,9 +41,9 @@ object JarBuild extends BuildMechanism {
         stagingDir.mkdirs()
         FileUtils.write(new File(targetDir, "classpath"), classpath + ":" + productFile.getAbsolutePath())
         
-        exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir, out, out)
+        exec(List("javac", "-d", stagingDir.getAbsolutePath(), "-cp", classpath) ::: files.map(_.getAbsolutePath()), sourceDir, out = out, err = out)
         val contents = Util.find(stagingDir){i=>true}.toList
-        exec(List("jar", "-cvf", productFile.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir, out, out)
+        exec(List("jar", "-cvf", productFile.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir, out = out, err = out)
 
       }
 

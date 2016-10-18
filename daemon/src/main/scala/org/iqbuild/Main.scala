@@ -99,6 +99,7 @@ object Main {
 		      val dir = moduleDescriptorFile.getParentFile() 
 			  val targetDir = new File(dir, "target")
               val pollingCache = new File(targetDir, "fs.json")
+              pollingCache.getParentFile.mkdirs()
           }
           
           val fsChanges = moduleDescriptors.map{descriptorPath=>
@@ -197,15 +198,15 @@ object Main {
       var modulesStatus = Seq[ModuleStatus]()
       new Thread(){
         override def run = while(true){
-          println("loop")
+//          println("loop")
           val oldModulesStatus = modulesStatus
           val result = buildAsNeeded(data.moduleDescriptors, modulesStatus)
           modulesStatus = result.modulesStatus 
           if(result.somethingChanged){
               println("notifying of changes")
-		      Main.synchronized(Main.notifyAll)
+		        Main.synchronized(Main.notifyAll)
           }
-	      Thread.sleep(200)
+	        Thread.sleep(200)
         }
       }.start();
       
