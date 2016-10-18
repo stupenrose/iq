@@ -14,9 +14,19 @@ class MavenMetadata(mavenCentral:String, group:String, artifactId:String, cache:
   val latestVersion = (xml \ "versioning" \ "latest").text 
 }
 
-class DependencyResolver(val cache:HttpFetcher, val mavenCentral:String = "http://central.maven.org/maven2/") {
+trait DependencyResolver {
+  def resolveDepsFor(spec:DependencySpec):PartiallyResolvedDependency
+}
+
+//class InternalDependencyResolver(currentModules:  => Seq[ModuleDescriptor]) extends DependencyResolver {
+//	def resolveDependencies(m:ModuleDescriptor):DependencyResolutionResult = {
+//	  m.deps
+//	}
+//}
+
+class MavenDependencyResolver(val cache:HttpFetcher, val mavenCentral:String = "http://central.maven.org/maven2/") extends DependencyResolver {
     
-    private def resolveDepsFor(spec:DependencySpec):ResolvedDependency = {
+    override def resolveDepsFor(spec:DependencySpec):PartiallyResolvedDependency = {
       
         val artifactUrl = Util.makeArtifactUrl(mavenCentral, spec.module .group , spec.module .name )
         def makeUrl(version:String) = artifactUrl + "/" + version + "/" + spec.module.name + "-" + version + ".jar"
@@ -36,16 +46,15 @@ class DependencyResolver(val cache:HttpFetcher, val mavenCentral:String = "http:
           case None => None
         }
         
-        val transitives:Seq[ResolvedDependency] = maybeVersion match {
+        val transitives:Seq[DependencySpec] = maybeVersion match {
           case Some(version)=> {
         	  try{
-        	      val heirarchy = new PomStuff(ModuleIdAndVersion(spec.module, version), mavenCentral, cache)
+      	      val heirarchy = new PomStuff(ModuleIdAndVersion(spec.module, version), mavenCentral, cache)
         	      
         		  heirarchy.dependencies.map{moduleAndVersion=>
         		    val ModuleIdAndVersion(moduleId, version) = moduleAndVersion
-        		    val spec = new DependencySpec(moduleId, Some(version))
-        		  	resolveDepsFor(spec)
-        	      }
+        		    new DependencySpec(moduleId, Some(version))
+      	      }
         	  }catch{
         	    case e:Throwable => throw new RuntimeException("Error fetching dependencies for " + spec.module + " " + version, e)
         	  }
@@ -56,13 +65,10 @@ class DependencyResolver(val cache:HttpFetcher, val mavenCentral:String = "http:
         resolution match {
           case Some(r)=>{
             val (spec, url) = r
-            ResolvedDependency(url, spec, transitives)
+            PartiallyResolvedDependency(url, spec, transitives)
           }
           case None=> throw new Exception("Unable to determine version for " + spec)
         }
     }
       
-	def resolveDependencies(m:ModuleDescriptor):DependencyResolutionResult = {
-	  DependencyResolutionResult(m.deps.map{spec=>resolveDepsFor(spec)})
-	}
 }

@@ -29,9 +29,30 @@ import scala.collection.mutable.ListBuffer
 
 object Main {
     val cache = new URLCache
-    val resolver = new DependencyResolver(cache)
+    val mavenResolver = new MavenDependencyResolver(cache)
     
     case class ModuleListItem (path:String, id:String)
+    
+    def fullyResolve(p:PartiallyResolvedDependency):ResolvedDependency = {
+      val transitives = fullyResolveAll(p.transitives)
+      
+      ResolvedDependency(
+          url = p.url, 
+          spec = p.spec, 
+          transitives)
+          
+    }
+    
+    def fullyResolveAll(specs:Seq[DependencySpec]) = {
+      specs
+          .map(mavenResolver.resolveDepsFor _ )
+          .map(fullyResolve)
+    }
+    
+    def resolveDependencies(m:ModuleDescriptor):DependencyResolutionResult = {
+      val resolutions = fullyResolveAll(m.deps)
+  	  DependencyResolutionResult(resolutions)
+  	}
     
     def main(whatever: Array[String]) {
       
@@ -119,7 +140,7 @@ object Main {
 	        val label = m.id
 	        
 	        val dependencyTree = time("Resolving dependencies for " + label, out){
-			      resolver.resolveDependencies(m)
+			      resolveDependencies(m)
 	        }
 	        
 	        val dependencies = time("processing dependency tree", out){
@@ -141,7 +162,29 @@ object Main {
 				  val nextState = if(prevState.isDefined && !changes.needsBuild) {
 				    (false, prevState.get)
 				  }else{
-					  (true, doBuild(changes.descriptorPath, changes.maybePrev, changes.currentState))
+				    
+				    def parseDescriptor(descriptorPath:String):ModuleDescriptor = {
+			        val paths = Paths(descriptorPath)
+    	        val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
+				      ModuleDescriptor.parse(text)
+			      }
+				    
+				    def getModuleDeps(descriptorPath:String):Seq[String] = {
+				      
+				      val thisModule = parseDescriptor(descriptorPath)
+				      val otherModules = moduleDescriptors.filterNot(_ == descriptorPath).map(parseDescriptor)
+				      
+				      def findDeps(m:ModuleDescriptor):Seq[ModuleDescriptor] = {
+			          val deps = resolveDependencies(m)
+//				        otherModules.filter { o => o.deps.contains(foo) }
+				        Seq()
+				      }
+				      Seq()
+				    }
+				    
+				    
+				    val newStatus = doBuild(changes.descriptorPath, changes.maybePrev, changes.currentState)
+					  (true, newStatus)
 				  }
 				  
 				  nextState

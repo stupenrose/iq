@@ -13,23 +13,25 @@ class DependencyResolverTest extends FunSuite {
     val http = new MockFetcher(Map(
     	"http://host.com/foo/bar/1.0/bar-1.0.pom" -> 
     	      <project>
-    			<groupId>foo</groupId>
-    			<artifactId>bar</artifactId>
-    			<version>1.0</version>
+    			    <groupId>foo</groupId>
+    			    <artifactId>bar</artifactId>
+    			    <version>1.0</version>
     	      </project>
     
     ))
     
-    val testSubject = new DependencyResolver(cache=http, mavenCentral="http://host.com/")
-    val moduleDescriptor = ModuleDescriptor(
-    							id=ModuleId("group", "name"), 
-    							build="jar", 
-    							deps=Seq(DependencySpec(ModuleId("foo", "bar"), Some("1.0"))))		
+    val testSubject = new MavenDependencyResolver(cache=http, mavenCentral="http://host.com/")
+    val spec = DependencySpec(ModuleId("foo", "bar"), Some("1.0"))
+    
     // when
-    val result = testSubject.resolveDependencies(moduleDescriptor)
+    val result = testSubject.resolveDepsFor(spec)
     
     // then
-    assert(result == DependencyResolutionResult(Seq(ResolvedDependency(url="http://host.com/foo/bar/1.0/bar-1.0.jar", spec=DependencySpec( ModuleId("foo", "bar"), Some("1.0")), transitives=Seq()))))
+    assert(result == 
+        PartiallyResolvedDependency(
+            url="http://host.com/foo/bar/1.0/bar-1.0.jar", 
+            spec=DependencySpec( ModuleId("foo", "bar"), Some("1.0")), 
+            transitives=Seq()))
   }
   
   
@@ -51,16 +53,17 @@ class DependencyResolverTest extends FunSuite {
     	      </project>
     ))
     
-    val testSubject = new DependencyResolver(cache=http, mavenCentral="http://host.com/")
-    val moduleDescriptor = ModuleDescriptor(
-    							id=ModuleId("group", "name"), 
-    							build="jar", 
-    							deps=Seq(DependencySpec(ModuleId("foo", "bar"),version = None)))		
+    val testSubject = new MavenDependencyResolver(cache=http, mavenCentral="http://host.com/")
+    val spec = DependencySpec(ModuleId("foo", "bar"),version = None)
+    
     // when
-    val result = testSubject.resolveDependencies(moduleDescriptor)
+    val result = testSubject.resolveDepsFor(spec)
     
     // then
-    assert(result == DependencyResolutionResult(Seq(ResolvedDependency(url="http://host.com/foo/bar/2.0/bar-2.0.jar", spec=DependencySpec(ModuleId("foo", "bar"), Some("2.0")), transitives=Seq()))))
+    assert(result == PartiallyResolvedDependency(
+                url="http://host.com/foo/bar/2.0/bar-2.0.jar", 
+                spec=DependencySpec(ModuleId("foo", "bar"), Some("2.0")), 
+                transitives=Seq()))
   }
   
   
@@ -104,35 +107,20 @@ class DependencyResolverTest extends FunSuite {
     	      </project>
     ))
     
-    val testSubject = new DependencyResolver(cache=http, mavenCentral="http://host.com/")
-    val moduleDescriptor = ModuleDescriptor(
-    							id=ModuleId("group", "name"), 
-    							build="jar", 
-    							deps=Seq(DependencySpec(ModuleId("alpha", "alpha"),version = Some("1.0"))))
+    val testSubject = new MavenDependencyResolver(cache=http, mavenCentral="http://host.com/")
+    val spec = DependencySpec(ModuleId("alpha", "alpha"),version = Some("1.0"))
     
     // when
-    val result = testSubject.resolveDependencies(moduleDescriptor)
+    val result = testSubject.resolveDepsFor(spec)
     
     // then
     assert(result  == 
-      DependencyResolutionResult(Seq(
-        ResolvedDependency(
+      PartiallyResolvedDependency(
             spec=DependencySpec(ModuleId("alpha", "alpha"), Some("1.0")), 
             url="http://host.com/alpha/alpha/1.0/alpha-1.0.jar",
-        	transitives=Seq(
-        		ResolvedDependency(
-        		    url="http://host.com/beta/beta/2.0/beta-2.0.jar",
-        		    spec=DependencySpec(ModuleId("beta", "beta"), Some("2.0")),
-        		    transitives=Seq(
-        		        ResolvedDependency(
-        		            url="http://host.com/gamma/gamma/3.0/gamma-3.0.jar",
-        		            spec=DependencySpec(ModuleId("gamma", "gamma"), Some("3.0")),
-        		            transitives=Seq()
-        		        )
-        		    )
-        		)
+        	transitives=Seq(DependencySpec(ModuleId("beta", "beta"), Some("2.0"))
         	)
-        ))))
+        ))
     
   }
   
@@ -183,29 +171,21 @@ class DependencyResolverTest extends FunSuite {
     	      </project>
     ))
     
-    val testSubject = new DependencyResolver(cache=http, mavenCentral="http://host.com/")
-    val moduleDescriptor = ModuleDescriptor(
-    							id=ModuleId("group", "name"), 
-    							build="jar", 
-    							deps=Seq(DependencySpec(ModuleId("child", "child"),version = Some("1.0"))))
+    val testSubject = new MavenDependencyResolver(cache=http, mavenCentral="http://host.com/")
+    val spec = DependencySpec(ModuleId("child", "child"),version = Some("1.0"))
     
     // when
-    val result = testSubject.resolveDependencies(moduleDescriptor)
+    val result = testSubject.resolveDepsFor(spec)
     
     // then
     assert(result  == 
-      DependencyResolutionResult(Seq(
-        ResolvedDependency(
+        PartiallyResolvedDependency(
             spec=DependencySpec(ModuleId("child", "child"), Some("1.0")), 
             url="http://host.com/child/child/1.0/child-1.0.jar",
-        	transitives=Seq(
-        		ResolvedDependency(
-        		    url="http://host.com/lib/lib/2.0/lib-2.0.jar",
-        		    spec=DependencySpec(ModuleId("lib", "lib"), Some("2.0")),
-        		    transitives=Seq()
+        	transitives=Seq(DependencySpec(ModuleId("lib", "lib"), Some("2.0"))
         		)
         	)
-        ))))
+        )
     
   }
   
