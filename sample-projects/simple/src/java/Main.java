@@ -4,7 +4,7 @@ public class Main {
 		System.out.println("Hello World!  This is my first IQ build!");
 		
 		Runtime.getRuntime().addShutdownHook(new Thread(){
-			public void run(){
+			public void run(){ 
 				System.out.println("Shutting down ...");
 			}
 		});

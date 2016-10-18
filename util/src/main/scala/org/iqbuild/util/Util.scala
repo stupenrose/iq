@@ -21,9 +21,9 @@ object Util {
     def find(dir:File)(filter:File=>Boolean):Seq[File] = {
       
       if(dir.isDirectory()){
-    	dir.listFiles().filter(filter).flatMap{child=>
-    	  find(child)(filter)
-    	}
+      	dir.listFiles().filter(filter).flatMap{child=>
+      	  find(child)(filter)
+      	}
       }else{
         Seq(dir)
       }

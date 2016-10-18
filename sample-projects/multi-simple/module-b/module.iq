@@ -3,4 +3,4 @@ build jar
 
 deps (classpath jars)
 
- commons-lang::2.6
+ us.penrose:module-c:

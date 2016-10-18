@@ -1,0 +1,5 @@
+id us.penrose:module-c
+build jar
+
+deps (classpath jars)
+

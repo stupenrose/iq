@@ -8,10 +8,10 @@
 [DONE] user sees streaming output from his app when using watchrun
 
 -- build more than one thing at once --
-multiple modules
+[DONE] multiple modules
    - [DONE] user adds module using cli tool
    - [DONE] user unregisters module using cli tool
-multiple modules with interdependencies
+[DONE] multiple modules with interdependencies
 
 -- chain code transformers --
 add a simple code templater to the mix of a java project - develop a generic api for standard transformers

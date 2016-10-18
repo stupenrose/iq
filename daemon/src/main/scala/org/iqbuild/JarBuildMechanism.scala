@@ -8,8 +8,8 @@ import java.io.PrintStream
 import org.iqbuild.util.Util
 
 object JarBuild extends BuildMechanism {
-      override def build(state:FSNode, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, out:PrintStream) {
-        val path = new File(state.path) 
+      override def build(moduleDirectory:String, targetDir:File, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, out:PrintStream) {
+        val path = new File(moduleDirectory) 
         val sourceDir = new File(path, "src")
         val javaFiles = new File(sourceDir, "java")
         val stagingDir = new File(targetDir, "jar")
@@ -26,7 +26,7 @@ object JarBuild extends BuildMechanism {
         out.println("done scanning")
         
         files.foreach(println)
-        out.println("foo " + path);
+        out.println("foo " + files);
         
         
         val cache = new URLCache()
@@ -34,7 +34,7 @@ object JarBuild extends BuildMechanism {
         val dependenciesOnDisk = dependencies.map{d=>cache.get(new URL(d.url))}
         val classpath = dependenciesOnDisk.map(_.getAbsolutePath()).mkString(":")
         
-        val productFile = new File(targetDir, "product.jar")
+        val productFile = new File(targetDir, "result")
         
         out.println("Deleting " + stagingDir.getAbsolutePath())
         FileUtils.deleteDirectory(stagingDir)

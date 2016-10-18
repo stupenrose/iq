@@ -26,13 +26,60 @@ import java.io.FileInputStream
 import org.httpobjects.Representation
 import scala.collection.generic.MutableMapFactory
 import scala.collection.mutable.ListBuffer
+import scala.util.Try
 
 object Main {
     val cache = new URLCache
     val mavenResolver = new MavenDependencyResolver(cache)
     
     case class ModuleListItem (path:String, id:String)
+    case class ModuleStatus(descriptorPath:String, maybeDescriptor:Option[ModuleDescriptor])
+    case class BuildResult(somethingChanged:Boolean, modulesStatus:Seq[ModuleStatus])
+    case class Paths(val descriptorPath:String){
+      val moduleDescriptorFile = new File(descriptorPath)
+      val dir = moduleDescriptorFile.getParentFile() 
+	    val targetDir = new File(dir, "target")
+      val pollingCache = new File(targetDir, "fs.json")
+      val result = new File(targetDir, "result")
+      pollingCache.getParentFile.mkdirs()
+    }
     
+    def findDir(f:File):File = {
+      val candidate = new File(f, ".iq")
+      if(candidate.exists()){
+        candidate
+      }else if(f.getParentFile()==null){
+        new File(System.getProperty("user.home"), ".iq")
+      }else {
+        findDir(f.getParentFile())
+      }
+    }
+    
+    val iqDir = findDir(new File(System.getProperty("user.dir")))
+    println("iqd - starting-up (" + iqDir.getAbsolutePath() + ")")
+    
+    val dataFilePath = new File(iqDir, "data.json")
+    var data = if(dataFilePath.exists()){
+      Jackson.parseJson[Data](dataFilePath)
+    }else{
+      Data()
+    }
+      
+    def parseDescriptor(descriptorPath:String):ModuleDescriptor = {
+      val paths = Paths(descriptorPath)
+      val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
+      ModuleDescriptor.parse(text)
+    }
+    
+    var modulesStatus:Seq[ModuleStatus] = data.moduleDescriptors.map{path=> 
+      ModuleStatus(
+          descriptorPath = path,
+          maybeDescriptor = Try(parseDescriptor(path)).toOption)
+    }
+    
+    
+    
+    /// DEP RESOLUTION
     def fullyResolve(p:PartiallyResolvedDependency):ResolvedDependency = {
       val transitives = fullyResolveAll(p.transitives)
       
@@ -43,39 +90,50 @@ object Main {
           
     }
     
+    def partiallyResolve(spec:DependencySpec):PartiallyResolvedDependency = {
+      
+      val maybeInternalMatch = modulesStatus.find{s=>
+        s.maybeDescriptor.exists{d=>
+          println(d.id + " vs " + spec.module)
+          d.id == spec.module
+        }
+      }.map{s=>
+        val paths = Paths(s.descriptorPath)
+        PartiallyResolvedDependency(
+            url = "file://" + paths.result,
+            spec = spec.copy(version=Some(Constants.INTERNAL_VERSION)), 
+            transitives = s.maybeDescriptor.get.deps)
+      }
+      
+      maybeInternalMatch match {
+        case Some(internalMatch) => {
+          println("Internal Match!")
+          internalMatch
+        }
+        case None => {
+          println("Using maven for " + spec)
+          mavenResolver.resolveDepsFor(spec)
+        }
+      }
+      
+    }
+    
     def fullyResolveAll(specs:Seq[DependencySpec]) = {
       specs
-          .map(mavenResolver.resolveDepsFor _ )
+          .map(partiallyResolve)
           .map(fullyResolve)
     }
     
-    def resolveDependencies(m:ModuleDescriptor):DependencyResolutionResult = {
+    def fullyResolveDependencies(m:ModuleDescriptor):DependencyResolutionResult = {
+      println("Resolving..")
       val resolutions = fullyResolveAll(m.deps)
+  	  println("Done") 
   	  DependencyResolutionResult(resolutions)
   	}
     
     def main(whatever: Array[String]) {
       
-      def findDir(f:File):File = {
-        val candidate = new File(f, ".iq")
-        if(candidate.exists()){
-          candidate
-        }else if(f.getParentFile()==null){
-          new File(System.getProperty("user.home"), ".iq")
-        }else {
-          findDir(f.getParentFile())
-        }
-      }
       
-      val iqDir = findDir(new File(System.getProperty("user.dir")))
-      println("iqd - starting-up (" + iqDir.getAbsolutePath() + ")")
-      
-      val dataFilePath = new File(iqDir, "data.json")
-      var data = if(dataFilePath.exists()){
-        Jackson.parseJson[Data](dataFilePath)
-      }else{
-        Data()
-      }
       
       val logPath = new File(iqDir, "log")
       val bytesOut = new FileOutputStream(logPath)
@@ -83,9 +141,6 @@ object Main {
       
       val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
       
-      case class ModuleStatus(descriptorPath:String, maybeDescriptor:Option[ModuleDescriptor])
-      
-      case class BuildResult(somethingChanged:Boolean, modulesStatus:Seq[ModuleStatus])
       
       case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
         def needsBuild = (maybePrev, deltas) match {
@@ -110,14 +165,6 @@ object Main {
 		      case _ => false
 		    }
       }
-                
-      case class Paths(val descriptorPath:String){
-        val moduleDescriptorFile = new File(descriptorPath)
-	      val dir = moduleDescriptorFile.getParentFile() 
-		    val targetDir = new File(dir, "target")
-        val pollingCache = new File(targetDir, "fs.json")
-        pollingCache.getParentFile.mkdirs()
-      }
       
       def buildAsNeeded(moduleDescriptors:Seq[String], prevModulesState:Seq[ModuleStatus]):BuildResult = {
         val fsChanges = moduleDescriptors.map{descriptorPath=>
@@ -129,10 +176,14 @@ object Main {
   			    case None => Seq()
   			  }
 		      Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(paths.pollingCache, fs);
-		      FilesystemChanges(descriptorPath, maybePrev, fs, deltas)
+		      FilesystemChanges(
+		          descriptorPath = descriptorPath, 
+		          maybePrev = maybePrev, 
+		          currentState = fs, 
+		          deltas = deltas)
         }
         
-        def doBuild(descriptorPath:String, maybePrev:Option[FSNode], fs:FSNode):ModuleStatus = {
+        def doBuild(descriptorPath:String):ModuleStatus = {
           val paths = Paths(descriptorPath)
     
 	        val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
@@ -140,7 +191,7 @@ object Main {
 	        val label = m.id
 	        
 	        val dependencyTree = time("Resolving dependencies for " + label, out){
-			      resolveDependencies(m)
+			      fullyResolveDependencies(m)
 	        }
 	        
 	        val dependencies = time("processing dependency tree", out){
@@ -149,88 +200,56 @@ object Main {
 	        
 	        time("building " + label, out){
 	        	val buildMechanism = buildMechanisms(m.build)
-    				buildMechanism.build(fs, paths.targetDir, dependencies, m, out)
+    				buildMechanism.build(paths.dir.getAbsolutePath, paths.targetDir, dependencies, m, out)
 	        }
 			
           ModuleStatus(descriptorPath, maybeDescriptor=Some(m))
 	       
 	      }
-          
+        
+        
+//        def foo(descriptorPath:String):Seq[ModuleStatus] = {
+//          
+//  			    val newStatus = doBuild(descriptorPath, changes.maybePrev, changes.currentState)
+//        }
 		    val results = fsChanges.map{changes=>
           val prevState = prevModulesState.find(_.descriptorPath ==changes.descriptorPath)
-		          
-				  val nextState = if(prevState.isDefined && !changes.needsBuild) {
-				    (false, prevState.get)
-				  }else{
-				    
-				    def parseDescriptor(descriptorPath:String):ModuleDescriptor = {
-			        val paths = Paths(descriptorPath)
-    	        val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
-				      ModuleDescriptor.parse(text)
-			      }
-				    
-				    def getModuleDeps(descriptorPath:String):Seq[String] = {
-				      
-				      val thisModule = parseDescriptor(descriptorPath)
-				      val otherModules = moduleDescriptors.filterNot(_ == descriptorPath).map(parseDescriptor)
-				      
-				      def findDeps(m:ModuleDescriptor):Seq[ModuleDescriptor] = {
-			          val deps = resolveDependencies(m)
-//				        otherModules.filter { o => o.deps.contains(foo) }
-				        Seq()
-				      }
-				      Seq()
-				    }
-				    
-				    
-				    val newStatus = doBuild(changes.descriptorPath, changes.maybePrev, changes.currentState)
-					  (true, newStatus)
-				  }
-				  
-				  nextState
-				  
-				  
-              // STEP 1: parse all the module descriptors, if able
-//		      case class PathState(val path:String, val maybeDescriptor:Option[ModuleDescriptor])
-//		      
-//		      val paths = data.moduleDescriptors.map{descriptorPath=>
-//		        val maybeDescriptor = try{
-//		          val descriptorFile = new File(descriptorPath)
-//		          val text = Source.fromFile(descriptorFile).getLines.mkString("\n")
-//		          Some(ModuleDescriptor.parse(text))
-//		        }catch{
-//		          case e:Exception => {
-//		            System.err.println("Error reading " + descriptorPath)
-//		            e.printStackTrace(System.err)
-//		            None
-//		          }
-//		        }
-//		        PathState(descriptorPath, maybeDescriptor)
-//		      }
-		      
-		      
-		      // STEP 2: resolve all the module dependencies
-		         // if
-		      
-		      // STEP 3: verify no 'bad' cycles (dependency cycles that will result in build cycles)
-		      
-		      // STEP 4: determine module build order
-		      
-		      // STEP 5: for each moduleInBuildOrder, build
-		//          val result = build(path, moduleDescriptor, prevModuleBuildState, filesystemChanges, dependencyChanges)
-		//          val newModuleState = result.buildState
-		//          val errors = result.errors
-		      
-		      // don't add new paths that are currently invalid?
-		      
-		      // for each existing path
-		      }
-          BuildResult(
-              somethingChanged=results.exists(_._1 ), 
-              modulesStatus = results.map(_._2 ))
+  	          
+  			  val nextState = if(prevState.isDefined && !changes.needsBuild) {
+  			    (false, prevState.get)
+  			  }else{
+  			    val newStatus = doBuild(changes.descriptorPath)
+  			   
+  			    // let's assume this build resulted in a change to the artifact.  now we need to
+  			    // build the downstream items
+  			    val updatedModuleId = newStatus.maybeDescriptor.get.id
+  			    moduleDescriptors.foreach{descriptorPath=>
+  			      val m = parseDescriptor(descriptorPath)
+    			    val dependencyTree = fullyResolveDependencies(m)
+    			    val dependencies = dependencyTree.flatten
+    			    
+    			    dependencies.foreach { d => 
+    			      if(updatedModuleId == d.spec.module){
+    			        out.println(s""" I've just built a module (${updatedModuleId}) that is a dependency of another module (${m.id}).  Rebuilding the latter...""")
+    			        doBuild(descriptorPath)
+//    			        throw new Exception(s"""
+//                        | I've just built a module (${updatedModuleId}) that is a dependency of another module (${d.spec.module}), but I don't yet know how to build that one in turn, at least not automatically""".stripMargin)
+    			      }
+    			    }
+  			    }
+  			    
+  			    
+  				  (true, newStatus)
+  			  }
+  			  
+  			  nextState
+	      }
+		    
+        BuildResult(
+            somethingChanged=results.exists(_._1 ), 
+            modulesStatus = results.map(_._2 ))
       }
       
-      var modulesStatus = Seq[ModuleStatus]()
       
       new Thread(){
         override def run = while(true){
