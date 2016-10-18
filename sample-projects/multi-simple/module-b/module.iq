@@ -1,0 +1,6 @@
+id us.penrose:module-b
+build jar
+
+deps (classpath jars)
+
+ commons-lang::2.6
