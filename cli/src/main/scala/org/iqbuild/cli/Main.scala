@@ -31,41 +31,73 @@ object Main {
           "watchrun" -> watchRun _,
           "web" -> openWebUI _,
           "include" -> include _,
-          "remove" -> remove _)
+          "remove" -> remove _,
+          "list" -> list _)
           
         commands.get(command) match {
           case Some(fn) => fn(args.tail)
           case None => println(s"""Unknown command: "$command".  Commands I know are:\n    """ + commands.keys.mkString(",\n    "))
         }
 	}
+  
+  def list(args:Seq[String]){
+    val client = new HttpClient
+	    
+    val request = new GetMethod(BASE_URL + "/modules")
+    val statusCode = client.executeMethod(request)
+
+    val text = request.getResponseBodyAsString()
+    request.releaseConnection()
+
+    if(statusCode!=200) throw new RuntimeException("error " + statusCode + ":\n" + text)
+
+	  val items = Jackson.jackson.readTree(text).map{node=>
+  	  ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
+    }
+    
+    println("REGISTERED MODULES:")
+    items.foreach{module=>
+      println(s"""    ${module.id} | ${module.path}""")
+    }
+  }
+  
     def remove(args:Seq[String]) {
-      val path = new File(args(0)).getAbsolutePath()
+      val arg = new File(args(0)).getCanonicalFile
       val client = new HttpClient
-	    val request = new GetMethod(BASE_URL + "/modules?path=" + path)
-	    val statusCode = client.executeMethod(request)
 	    
-        
-	    val text = request.getResponseBodyAsString()
-	    request.releaseConnection()
-	    
-	    if(statusCode!=200) 
-	      throw new RuntimeException("error " + statusCode + ":\n" + text)
-        
-	    val items = Jackson.jackson.readTree(text).map{node=>
-	      ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
+      
+	    val paths = if(arg.isDirectory){
+	      scan(arg)
+	    }else{
+	      Seq(arg)
+	    }
+      
+      paths.foreach{path=>
+        println("Removing " + path.getAbsolutePath)
+        val request = new GetMethod(BASE_URL + "/modules?path=" + path.getAbsolutePath())
+        val statusCode = client.executeMethod(request)
+  
+        val text = request.getResponseBodyAsString()
+        request.releaseConnection()
+  
+        if(statusCode!=200) throw new RuntimeException("error " + statusCode + ":\n" + text)
+  
+    	  val items = Jackson.jackson.readTree(text).map{node=>
+      	  ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
         }
-        
-        items.find(_.path  == path) match {
-          case None=> println("no module for " + path)
+  
+        items.find(_.path  == path.getAbsolutePath()) match {
+          case None=> println("no module for " + path.getAbsolutePath())
           case Some(item)=> {
-            val request = new DeleteMethod(BASE_URL + "/modules/" + item.id)
-		    execute(client, request) {statusCode=>
-		      if(statusCode!=200)
-		        throw new Exception(
-		        		"Error " + statusCode + ": (" + request.getURI() + ")\n" + request.getResponseBodyAsString())
-		    }
+        	  val request = new DeleteMethod(BASE_URL + "/modules/" + item.id)
+    			  execute(client, request) {statusCode=>
+    			  if(statusCode!=200)
+    				  throw new Exception("Error " + statusCode + ": (" + request.getURI() + ")\n" + request.getResponseBodyAsString())
+        	  }
           }
         }
+      }
+      
 	}
     
     def execute(client:HttpClient, request:org.apache.commons.httpclient.HttpMethod)(fn:Int=>Unit){
@@ -77,18 +109,40 @@ object Main {
       }
     }
     
+    
+  private def scan(path:File):Seq[File] = {
+    if(path.isDirectory()){
+      path.listFiles().flatMap(scan)
+    }else if(path.isFile() && path.getName == "module.iq"){
+      Seq(path)
+    }else{
+      Seq()
+    }
+  }
+  
 	def include(args:Seq[String]) {
-	    val path = new File(args(0)).getAbsolutePath()
-      val client = new HttpClient
-	    val request = new PostMethod(BASE_URL + "/modules")
-      request.setRequestBody(path)
-	    val statusCode = client.executeMethod(request)
+	    val arg = new File(args(0)).getCanonicalFile
 	    
-	    val text = request.getResponseBodyAsString()
-	    request.releaseConnection()
+	    val pathsToAdd = if(arg.isDirectory){
+	      scan(arg)
+	    }else{
+	      Seq(arg)
+	    }
 	    
-	    if(statusCode!=200) 
-	      throw new RuntimeException("error " + statusCode + ":\n" + text)
+	    pathsToAdd.foreach{path=> 
+        println("Including " + path.getAbsolutePath)
+	      val client = new HttpClient
+  	    val request = new PostMethod(BASE_URL + "/modules")
+        request.setRequestBody(path.getAbsolutePath())
+  	    val statusCode = client.executeMethod(request)
+  	    
+  	    val text = request.getResponseBodyAsString()
+  	    request.releaseConnection()
+  	    
+  	    if(statusCode!=200) 
+  	      throw new RuntimeException("error " + statusCode + ":\n" + text)
+	    }
+      
 	    
 	}
 	def openWebUI(args:Seq[String]) {
