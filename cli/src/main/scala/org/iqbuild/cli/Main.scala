@@ -17,6 +17,9 @@ import org.apache.commons.httpclient.methods.DeleteMethod
 import java.io.OutputStream
 import hudson.util.ProcessTree
 import org.iqbuild.Jackson
+import scala.io.Source
+import org.iqbuild.ModuleDescriptor
+import java.io.PrintWriter
 
 case class ModuleListItem (path:String, id:String)
     

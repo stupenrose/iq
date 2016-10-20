@@ -48,6 +48,7 @@ object ModuleDescriptor{
         case Array("~", a) => (ModuleId(id.group, parts(1)), None)
         case Array(label, "", version) => (ModuleId(label, label), Some(version))
         case Array(string1, string2) => (ModuleId(group=string1, name=string2), None)
+        case Array(group, name, version) => (ModuleId(group=group, name=name), Some(version))
         case _ => throw new Exception("Unable to parse dependency: " + line) 
       }
       DependencySpec(module=moduleAndVersion._1, version=moduleAndVersion._2, inclusion=inclusionSpec)

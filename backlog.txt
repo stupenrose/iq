@@ -32,7 +32,7 @@ build a single jar with groovy classes & static resources
 build a single jar with clojure code & static resources
 
 -- maven export --
-configure a module to generate a maven companion pom
+[DONE] configure a module to generate a maven companion pom
 
 -- consume dependencies in interesting ways --
 build a single jar that depends on unpacked zip stuff in the classpath

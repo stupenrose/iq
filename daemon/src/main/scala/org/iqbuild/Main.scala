@@ -27,6 +27,9 @@ import org.httpobjects.Representation
 import scala.collection.generic.MutableMapFactory
 import scala.collection.mutable.ListBuffer
 import scala.util.Try
+import java.io.PrintWriter
+import org.httpobjects.Response
+import org.iqbuild.maven.PomGenerator
 
 object Main {
     val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
@@ -95,7 +98,6 @@ object Main {
       
       val maybeInternalMatch = modulesStatus.find{s=>
         s.maybeDescriptor.exists{d=>
-          println(d.id + " vs " + spec.module)
           d.id == spec.module
         }
       }.map{s=>
@@ -149,7 +151,7 @@ object Main {
       
       time("building " + label, out){
       	val buildMechanism = buildMechanisms(m.build)
-				buildMechanism.build(paths.dir.getAbsolutePath, paths.targetDir, dependencies, m, out)
+				buildMechanism.build(paths, dependencyTree, dependencies, m, out)
       }
 	     // let's assume this build resulted in a change to the artifact.  now we need to
 	    // build the downstream items
@@ -213,7 +215,10 @@ object Main {
         val fsChanges = moduleDescriptors.map{descriptorPath=>
           val paths = Paths(descriptorPath)
           val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
-		      val fs = FSNode.forPath(paths.dir, {f => f!=paths.targetDir && !f.getName().startsWith(".")})
+		      val fs = FSNode.forPath(paths.dir, {f => 
+		        f!=paths.targetDir && 
+		        !f.getName.equals("pom.xml") && // hack!
+		        !f.getName().startsWith(".")})
   			  val deltas = maybePrev match {
   			    case Some(prev) => fs.deltas(prev)
   			    case None => Seq()
@@ -344,6 +349,18 @@ object Main {
             override def get(req:Request) = {
             	Main.synchronized(Main.wait())
             	OK(Text("done"))
+            }
+          },
+          new HttpObject("/modules/{moduleId}/pom"){
+            override def get(req:Request) = {
+      	  	  val id = req.path().valueFor("moduleId")
+      	  	  val maybeDescriptor = modulesStatus.find(_.maybeDescriptor.get.id.toString == id)
+
+      	  	  maybeDescriptor
+      	  	    .flatMap(_.maybeDescriptor)
+      	  	    .map{d=>PomGenerator.generatePOM(d, fullyResolveDependencies(d))}
+      	  	    .map{text=>OK(Text(text))}
+      	  	    .getOrElse(INTERNAL_SERVER_ERROR(Text("Invalid descriptor")))
             }
           },
           new HttpObject("/log"){
