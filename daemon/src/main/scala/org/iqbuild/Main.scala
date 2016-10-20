@@ -252,12 +252,16 @@ object Main {
       
       new Thread(){
         override def run = while(true){
-          val oldModulesStatus = modulesStatus
-          val result = buildAsNeeded(data, modulesStatus)
-          modulesStatus = result.modulesStatus 
-          if(result.somethingChanged){
-              println("notifying of changes")
-		        Main.synchronized(Main.notifyAll)
+          try{
+        	  val oldModulesStatus = modulesStatus
+        			  val result = buildAsNeeded(data, modulesStatus)
+        			  modulesStatus = result.modulesStatus 
+        			  if(result.somethingChanged){
+        				  println("notifying of changes")
+        				  Main.synchronized(Main.notifyAll)
+        			  }
+          }catch{
+            case t:Throwable => t.printStackTrace()
           }
 	        Thread.sleep(200)
         }
