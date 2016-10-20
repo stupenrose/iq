@@ -29,6 +29,7 @@ import scala.collection.mutable.ListBuffer
 import scala.util.Try
 
 object Main {
+    val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
     val cache = new URLCache
     val mavenResolver = new MavenDependencyResolver(cache)
     
@@ -131,6 +132,48 @@ object Main {
   	  DependencyResolutionResult(resolutions)
   	}
     
+    def doBuild(descriptorPath:String, data:Data, out:PrintStream):ModuleStatus = {
+      val paths = Paths(descriptorPath)
+
+      val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
+      val m = ModuleDescriptor.parse(text)
+      val label = m.id
+      
+      val dependencyTree = time("Resolving dependencies for " + label, out){
+	      fullyResolveDependencies(m)
+      }
+      
+      val dependencies = time("processing dependency tree", out){
+        dependencyTree.flatten
+      }
+      
+      time("building " + label, out){
+      	val buildMechanism = buildMechanisms(m.build)
+				buildMechanism.build(paths.dir.getAbsolutePath, paths.targetDir, dependencies, m, out)
+      }
+	     // let's assume this build resulted in a change to the artifact.  now we need to
+	    // build the downstream items
+	    buildDownstreamDependencies(m.id, data, out)
+	    
+      ModuleStatus(descriptorPath, maybeDescriptor=Some(m))
+     
+    }
+    
+    def buildDownstreamDependencies(updatedModuleId:ModuleId, data:Data, out:PrintStream){
+      data.moduleDescriptors.foreach{descriptorPath=>
+        val m = parseDescriptor(descriptorPath)
+  	    val dependencyTree = fullyResolveDependencies(m)
+  	    val dependencies = dependencyTree.flatten
+  	    
+  	    dependencies.foreach { d => 
+  	      if(updatedModuleId == d.spec.module){
+  	        out.println(s""" I've just built a module (${updatedModuleId}) that is a dependency of another module (${m.id}).  Rebuilding the latter...""")
+  	        doBuild(descriptorPath, data, out)
+  	      }
+  	    }
+      }
+    }
+    
     def main(whatever: Array[String]) {
       
       
@@ -139,7 +182,6 @@ object Main {
       val bytesOut = new FileOutputStream(logPath)
       val out = new PrintStream(bytesOut)
       
-      val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
       
       
       case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
@@ -166,7 +208,8 @@ object Main {
 		    }
       }
       
-      def buildAsNeeded(moduleDescriptors:Seq[String], prevModulesState:Seq[ModuleStatus]):BuildResult = {
+      def buildAsNeeded(data:Data, prevModulesState:Seq[ModuleStatus]):BuildResult = {
+        val moduleDescriptors = data.moduleDescriptors
         val fsChanges = moduleDescriptors.map{descriptorPath=>
           val paths = Paths(descriptorPath)
           val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
@@ -183,62 +226,13 @@ object Main {
 		          deltas = deltas)
         }
         
-        def doBuild(descriptorPath:String):ModuleStatus = {
-          val paths = Paths(descriptorPath)
-    
-	        val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
-	        val m = ModuleDescriptor.parse(text)
-	        val label = m.id
-	        
-	        val dependencyTree = time("Resolving dependencies for " + label, out){
-			      fullyResolveDependencies(m)
-	        }
-	        
-	        val dependencies = time("processing dependency tree", out){
-	          dependencyTree.flatten
-	        }
-	        
-	        time("building " + label, out){
-	        	val buildMechanism = buildMechanisms(m.build)
-    				buildMechanism.build(paths.dir.getAbsolutePath, paths.targetDir, dependencies, m, out)
-	        }
-			
-          ModuleStatus(descriptorPath, maybeDescriptor=Some(m))
-	       
-	      }
-        
-        
-//        def foo(descriptorPath:String):Seq[ModuleStatus] = {
-//          
-//  			    val newStatus = doBuild(descriptorPath, changes.maybePrev, changes.currentState)
-//        }
 		    val results = fsChanges.map{changes=>
           val prevState = prevModulesState.find(_.descriptorPath ==changes.descriptorPath)
   	          
   			  val nextState = if(prevState.isDefined && !changes.needsBuild) {
   			    (false, prevState.get)
   			  }else{
-  			    val newStatus = doBuild(changes.descriptorPath)
-  			   
-  			    // let's assume this build resulted in a change to the artifact.  now we need to
-  			    // build the downstream items
-  			    val updatedModuleId = newStatus.maybeDescriptor.get.id
-  			    moduleDescriptors.foreach{descriptorPath=>
-  			      val m = parseDescriptor(descriptorPath)
-    			    val dependencyTree = fullyResolveDependencies(m)
-    			    val dependencies = dependencyTree.flatten
-    			    
-    			    dependencies.foreach { d => 
-    			      if(updatedModuleId == d.spec.module){
-    			        out.println(s""" I've just built a module (${updatedModuleId}) that is a dependency of another module (${m.id}).  Rebuilding the latter...""")
-    			        doBuild(descriptorPath)
-//    			        throw new Exception(s"""
-//                        | I've just built a module (${updatedModuleId}) that is a dependency of another module (${d.spec.module}), but I don't yet know how to build that one in turn, at least not automatically""".stripMargin)
-    			      }
-    			    }
-  			    }
-  			    
-  			    
+  			    val newStatus = doBuild(changes.descriptorPath, data, out)
   				  (true, newStatus)
   			  }
   			  
@@ -254,7 +248,7 @@ object Main {
       new Thread(){
         override def run = while(true){
           val oldModulesStatus = modulesStatus
-          val result = buildAsNeeded(data.moduleDescriptors, modulesStatus)
+          val result = buildAsNeeded(data, modulesStatus)
           modulesStatus = result.modulesStatus 
           if(result.somethingChanged){
               println("notifying of changes")
