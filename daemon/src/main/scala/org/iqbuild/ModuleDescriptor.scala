@@ -45,9 +45,9 @@ object ModuleDescriptor{
       val parts = ids.split(":").map(_.trim)
       
       val moduleAndVersion = parts match {
-        case Array("~", a) => (ModuleId(id.group, parts(1)), None)
-        case Array(label, "", version) => (ModuleId(label, label), Some(version))
-        case Array(string1, string2) => (ModuleId(group=string1, name=string2), None)
+        case Array("~", name) => (ModuleId(group=id.group, name=name), None)
+        case Array(label, "", version) => (ModuleId(group=label, name=label), Some(version))
+        case Array(group, name) => (ModuleId(group=group, name=name), None)
         case Array(group, name, version) => (ModuleId(group=group, name=name), Some(version))
         case _ => throw new Exception("Unable to parse dependency: " + line) 
       }
