@@ -21,23 +21,31 @@ import org.iqbuild.Jackson
 case class ModuleListItem (path:String, id:String)
     
 object Main {
-    val BASE_URL = "http://localhost:33421"
+  val BASE_URL = "http://localhost:33421"
     
+  val commands = Map(
+    "tail" -> tail _,
+    "watchrun" -> watchRun _,
+    "web" -> openWebUI _,
+    "include" -> include _,
+    "remove" -> remove _,
+    "list" -> list _)
+    
+  val usage = "Commands I know are:\n    " + commands.keys.mkString(",\n    ")
+  
 	def main(args: Array[String]) {
-        val command = args(0)
         
-        val commands = Map(
-          "tail" -> tail _,
-          "watchrun" -> watchRun _,
-          "web" -> openWebUI _,
-          "include" -> include _,
-          "remove" -> remove _,
-          "list" -> list _)
-          
-        commands.get(command) match {
-          case Some(fn) => fn(args.tail)
-          case None => println(s"""Unknown command: "$command".  Commands I know are:\n    """ + commands.keys.mkString(",\n    "))
+        if(args.isEmpty) {
+          println(usage)
+        }else{
+          val command = args(0)
+        
+          commands.get(command) match {
+            case Some(fn) => fn(args.tail)
+            case None => println(s"""Unknown command: "$command".  """ + usage)
+          }
         }
+        
 	}
   
   def list(args:Seq[String]){
