@@ -13,6 +13,9 @@
    - [DONE] user unregisters module using cli tool
 [DONE] multiple modules with interdependencies
 
+-- unleash other developers --
+develop the generic API for other build processes
+
 -- chain code transformers --
 add a simple code templater to the mix of a java project - develop a generic api for standard transformers
 

@@ -32,7 +32,13 @@ import org.httpobjects.Response
 import org.iqbuild.maven.PomGenerator
 
 object Main {
-    val buildMechanisms:Map[String, BuildMechanism] = Map("jar"-> JarBuild )  
+    val buildMechanisms:Map[String, BuildMechanism] = Map(
+        "jar" -> JarBuild,
+        "node" -> new ExternalBuildMechanism(
+                        name="node", 
+                        port=8080,
+                        cmd = "python -m SimpleHTTPServer 9000"))
+    
     val cache = new URLCache
     val mavenResolver = new MavenDependencyResolver(cache)
     
@@ -183,8 +189,6 @@ object Main {
       val logPath = new File(iqDir, "log")
       val bytesOut = new FileOutputStream(logPath)
       val out = new PrintStream(bytesOut)
-      
-      
       
       case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
         def needsBuild = (maybePrev, deltas) match {
