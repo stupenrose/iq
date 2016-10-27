@@ -324,6 +324,25 @@ object Main {
   	  	      }
       	  	}
           },
+          new HttpObject("/modules/{moduleId}/dependencies"){
+      	  	override def get(req:Request) = {
+      	  	  val id = req.path().valueFor("moduleId")
+      	  	  val maybeDescriptor = modulesStatus.find(_.maybeDescriptor.get.id.toString == id)
+      	  	  
+      	  	  maybeDescriptor match {
+      	  	    case None=>NOT_FOUND
+      	  	    case Some(descriptor)=>{
+      	  	      
+      	  	      val result = DependencyResolutionResult(fullyResolveAll(descriptor.maybeDescriptor.get.deps))
+  	              val resolutions = result.flatten().map{dep=>
+      	  	        dep.spec.module -> dep.spec.version
+      	  	      }
+      	  	      
+      	  	      OK(Json(Jackson.jackson .writerWithDefaultPrettyPrinter().writeValueAsString(resolutions)))
+      	  	    }
+      	  	  }
+      	  	}
+          },
           new HttpObject("/modules/{moduleId}"){
       	  	override def get(req:Request) = {
       	  	  val id = req.path().valueFor("moduleId")

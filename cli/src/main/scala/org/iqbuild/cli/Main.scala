@@ -20,6 +20,7 @@ import org.iqbuild.Jackson
 import scala.io.Source
 import org.iqbuild.ModuleDescriptor
 import java.io.PrintWriter
+import com.fasterxml.jackson.databind.JsonNode
 
 case class ModuleListItem (path:String, id:String)
     
@@ -32,7 +33,8 @@ object Main {
     "web" -> openWebUI _,
     "include" -> include _,
     "remove" -> remove _,
-    "list" -> list _)
+    "list" -> list _,
+    "dependencies" -> dependencies _)
     
   val usage = "Commands I know are:\n    " + commands.keys.mkString(",\n    ")
   
@@ -50,6 +52,44 @@ object Main {
         }
         
 	}
+  
+  def dependencies(args:Seq[String]){
+    
+
+	  val items = Jackson.jackson.readTree(getText(BASE_URL + "/modules")).map{node=>
+  	  ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
+    }
+    
+    val maybeModule = items.find{module=>
+      val a = new File(module.path).getCanonicalFile.getParentFile.getCanonicalPath
+      val b = new File(System.getProperty("user.dir")).getCanonicalPath
+      a == b
+    }
+    
+    maybeModule match {
+      case Some(module) => {
+    	  val items = Jackson.jackson.readTree(getText(BASE_URL + "/modules/" + module.id + "/dependencies")).map{node=>
+    	    val List(id, version) = node.elements().toList.asInstanceOf[List[JsonNode]]
+    	    println("    " + id.at("/group").asText() + ":" + id.at("/name").asText() + ":" + version.asText)
+        }
+      }
+        
+    }
+  }
+  
+  private def getText(url:String):String = {
+    val client = new HttpClient
+      
+    val request = new GetMethod(url)
+    val statusCode = client.executeMethod(request)
+  
+    val text = request.getResponseBodyAsString()
+    request.releaseConnection()
+  
+    if(statusCode!=200) throw new RuntimeException("error " + statusCode + ":\n" + text)
+    
+    text
+  }
   
   def list(args:Seq[String]){
     val client = new HttpClient
