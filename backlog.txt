@@ -13,6 +13,11 @@
    - [DONE] user unregisters module using cli tool
 [DONE] multiple modules with interdependencies
 
+-- usability --
+
+cli starts the daemon if it isn't already running???
+or, package the daemon as 'cli-daemon'?
+
 -- unleash other developers --
 develop the generic API for other build processes
 
