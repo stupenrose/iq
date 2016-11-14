@@ -69,12 +69,18 @@ object Main {
     println("iqd - starting-up (" + iqDir.getAbsolutePath() + ")")
     
     val dataFilePath = new File(iqDir, "data.json")
+    
     var data = if(dataFilePath.exists()){
       Jackson.parseJson[Data](dataFilePath)
     }else{
       Data()
     }
       
+    def save(d:Data){
+      Jackson.jackson.writer.withDefaultPrettyPrinter().writeValue(dataFilePath, d)
+      this.data = d
+    }
+    
     def parseDescriptor(descriptorPath:String):ModuleDescriptor = {
       val paths = Paths(descriptorPath)
       val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
@@ -317,8 +323,7 @@ object Main {
   	  	      maybeDescriptor match {
   	  	        case None => BAD_REQUEST(Text("Unable to read/parse descriptor at" + p.getAbsolutePath()))
   	  	        case Some(d) => {
-    	    	  	  data = data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path)
-    	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
+    	    	  	  save(data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path))
     	    	  	  OK(Text("Added " + d.id))
   	  	        }
   	  	      }
@@ -363,8 +368,7 @@ object Main {
       	  	  modulesStatus.filter(_.maybeDescriptor .isDefined).find(_.maybeDescriptor.get.id == id) match {
       	  	    case None=>NOT_FOUND
       	  	    case Some(handler)=>{
-      	  	      data = data.copy(moduleDescriptors = data.moduleDescriptors.filter(_!=handler.descriptorPath))
-  	    	  	  Jackson.jackson .writeValue(dataFilePath, data)
+      	  	      save(data.copy(moduleDescriptors = data.moduleDescriptors.filter(_!=handler.descriptorPath)))
       	  	      
       	  	      OK(Text("Deleted"))
       	  	    }
