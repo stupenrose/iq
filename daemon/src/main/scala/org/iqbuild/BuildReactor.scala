@@ -8,20 +8,20 @@ case class ReactorState(fsChanges:Seq[FilesystemChanges], data:Data)
 class BuildReactor(
     val buildMechanisms:Map[String, BuildMechanism], 
     val fullyResolveDependencies:ModuleDescriptor=>DependencyResolutionResult,
-    val parseDescriptor:String=>ModuleDescriptor) {
+    val parseDescriptor:String=>ModuleDescriptor, 
+    val out:PrintStream) {
   
-  def blockUntilAllInputHasBeenProcessed(externalChanges:Stream[ReactorState], data:Data, out:PrintStream):BuildResult = {
+  def blockUntilAllInputHasBeenProcessed(externalChanges:Stream[ReactorState]):BuildResult = {
     
-      def initialState(data:Data):BuildResult = {
-        BuildResult(
-              modulesStatus = data.moduleDescriptors.map{path=> 
+      val initialState = BuildResult(
+              modulesStatus = externalChanges.head.data.moduleDescriptors.map{path=> 
                 ModuleStatus(
                     descriptorPath = path,
                     maybeDescriptor = Try(parseDescriptor(path)).toOption,
                     errors = Seq())})
-      }
+      
       // should never finish ... this is our "loop"
-      externalChanges.foldLeft(initialState(data))(respondToFilesystemChanges(out, _, _))
+      externalChanges.foldLeft(initialState)(respondToFilesystemChanges(out, _, _))
   }
   
   def respondToFilesystemChanges(out:PrintStream, previousBuild:BuildResult, state:ReactorState):BuildResult = {

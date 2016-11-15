@@ -5,9 +5,9 @@ import java.io.PrintStream
 
 trait BuildMechanism {
   
-      /**
-       * This is essentially a fold{(previousState, changes)=>newState}
-       */
+  /**
+   * This is essentially a fold{(previousState, changes)=>newState}
+   */
 	def build(
 	          /*
 	           * Input

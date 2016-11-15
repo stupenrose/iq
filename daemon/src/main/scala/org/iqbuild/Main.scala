@@ -126,8 +126,6 @@ object Main {
           errors = Seq())
     }
     
-    
-    
     /// DEP RESOLUTION
     def fullyResolve(p:PartiallyResolvedDependency):ResolvedDependency = {
       val transitives = fullyResolveAll(p.transitives)
@@ -367,15 +365,17 @@ object Main {
         scanForChanges()
       }
       
-      
+      val reactor = new BuildReactor(
+          buildMechanisms = buildMechanisms, 
+          parseDescriptor = parseDescriptor,
+          fullyResolveDependencies = fullyResolveDependencies,
+          out = out)
       
       val reactorInputEvents = filesystemChangesOverTime.map{fsChanges => 
         ReactorState(fsChanges, data)
       }
-      new BuildReactor(
-          buildMechanisms = buildMechanisms, 
-          parseDescriptor = parseDescriptor,
-          fullyResolveDependencies = fullyResolveDependencies).blockUntilAllInputHasBeenProcessed(reactorInputEvents, data, out);
+      
+      reactor.blockUntilAllInputHasBeenProcessed(reactorInputEvents);
     }
     
     
