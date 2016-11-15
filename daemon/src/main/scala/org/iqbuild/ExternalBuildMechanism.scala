@@ -1,12 +1,10 @@
 package org.iqbuild
 
-import org.iqbuild.Main.Paths
 import java.io.PrintStream
 import org.apache.commons.httpclient.HttpClient
 import org.apache.commons.httpclient.methods.PostMethod
 import java.io.InputStream
 import java.io.OutputStream
-import org.iqbuild.Main.ModuleStatus
 
 case class GenericBuildJson(paths:Paths, dependencies:Seq[ResolvedDependency], descriptor:ModuleDescriptor)
 

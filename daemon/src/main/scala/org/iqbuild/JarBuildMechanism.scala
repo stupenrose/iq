@@ -8,12 +8,9 @@ import java.io.PrintStream
 import org.iqbuild.util.Util
 import org.iqbuild.maven.PomGenerator
 import java.io.PrintWriter
-import org.iqbuild.Main.Paths
-import org.iqbuild.Main.ModuleBuildError
 import java.io.ByteArrayOutputStream
 import java.io.StringWriter
 import scala.util.Try
-import org.iqbuild.Main.ModuleStatus
 
 object JarBuild extends BuildMechanism {
       private def toString(t:Throwable):String = {
