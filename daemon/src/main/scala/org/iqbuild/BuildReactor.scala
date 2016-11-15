@@ -12,16 +12,15 @@ class BuildReactor(
     val out:PrintStream) {
   
   def blockUntilAllInputHasBeenProcessed(externalChanges:Stream[ReactorState]):BuildResult = {
+    val initialState = BuildResult(
+            modulesStatus = externalChanges.head.data.moduleDescriptors.map{path=> 
+              ModuleStatus(
+                  descriptorPath = path,
+                  maybeDescriptor = Try(parseDescriptor(path)).toOption,
+                  errors = Seq())})
     
-      val initialState = BuildResult(
-              modulesStatus = externalChanges.head.data.moduleDescriptors.map{path=> 
-                ModuleStatus(
-                    descriptorPath = path,
-                    maybeDescriptor = Try(parseDescriptor(path)).toOption,
-                    errors = Seq())})
-      
-      // should never finish ... this is our "loop"
-      externalChanges.foldLeft(initialState)(respondToFilesystemChanges(out, _, _))
+    // should never finish ... this is our "loop"
+    externalChanges.foldLeft(initialState)(respondToFilesystemChanges(out, _, _))
   }
   
   def respondToFilesystemChanges(out:PrintStream, previousBuild:BuildResult, state:ReactorState):BuildResult = {
