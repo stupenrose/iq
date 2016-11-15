@@ -33,8 +33,13 @@ object PomGenerator {
                      #    <artifactId>${descriptor.id.name}</artifactId>
                      #    <version>${defaultVersion}</version>
                      #    
+                     #    <properties>
+                     #        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+                     #    </properties>
+                     #    
                      #    <build>
-                     #    	<sourceDirectory>src/java</sourceDirectory>
+                     #        <sourceDirectory>src</sourceDirectory>
+                     #        <testSourceDirectory>target/nothing</testSourceDirectory>
                      #    </build>
                      #    
                      #    <dependencies>

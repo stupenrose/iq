@@ -6,6 +6,7 @@ import org.apache.commons.httpclient.HttpClient
 import org.apache.commons.httpclient.methods.PostMethod
 import java.io.InputStream
 import java.io.OutputStream
+import org.iqbuild.Main.ModuleStatus
 
 case class GenericBuildJson(paths:Paths, dependencies:Seq[ResolvedDependency], descriptor:ModuleDescriptor)
 
@@ -30,7 +31,8 @@ class ExternalBuildMechanism(val name:String, val port:Int, val cmd:String) exte
     }
   })
   
-	def build(paths:Paths, tree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, out:PrintStream) = {
+	def build(paths:Paths, tree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor,
+	          maybePreviousState:Option[ModuleStatus], out:PrintStream) = {
     val data = GenericBuildJson(
         paths = paths,
         dependencies = dependencies,
@@ -38,6 +40,7 @@ class ExternalBuildMechanism(val name:String, val port:Int, val cmd:String) exte
         
 	  post(s"http://localhost:$port/build", Jackson.jackson.writeValueAsString(data))(pipeOneByetAtATime(_, out))
 	  
+	  Seq()
 	}
   
   private def pipeOneByetAtATime(input:InputStream, out:OutputStream){

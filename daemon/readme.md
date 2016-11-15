@@ -62,3 +62,12 @@ I'm envisioning something of a cross between:
   - eclipse (the good parts)
 
 The final product will drastically simplify the way software is built & delivered, across all the workflows in the entire code/build/test/deploy lifecycle
+
+notes to build system authors
+=============
+
+One of the fundamental problems that iq solves is this:
+   - there is a continuous, asynchronous stream of filesystem changes that are not triggered by IQ (by users, other processes, etc)
+   - in response, IQ triggers builds of modules
+   - when a module is built, the filesystem is affected
+   - in order to avoid endless feedback loops, all builds must isolate their changes to the 'target' area ... IQ ignores all changes to this area when detecting FS changes from others

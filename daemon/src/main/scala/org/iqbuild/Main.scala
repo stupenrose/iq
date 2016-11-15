@@ -30,6 +30,7 @@ import scala.util.Try
 import java.io.PrintWriter
 import org.httpobjects.Response
 import org.iqbuild.maven.PomGenerator
+import org.iqbuild.Main.ModuleStatus
 
 object Main {
     val buildMechanisms:Map[String, BuildMechanism] = Map(
@@ -43,8 +44,13 @@ object Main {
     val mavenResolver = new MavenDependencyResolver(cache)
     
     case class ModuleListItem (path:String, id:String)
-    case class ModuleStatus(descriptorPath:String, maybeDescriptor:Option[ModuleDescriptor])
-    case class BuildResult(somethingChanged:Boolean, modulesStatus:Seq[ModuleStatus])
+    case class ModuleBuildError(path:String, where:String, description:String)
+    case class ModuleStatus(
+          descriptorPath:String, 
+          maybeDescriptor:Option[ModuleDescriptor],
+          errors:Seq[ModuleBuildError])
+          
+    case class BuildResult( modulesStatus:Seq[ModuleStatus])
     case class Paths(val descriptorPath:String){
       val moduleDescriptorFile = new File(descriptorPath)
       val dir = moduleDescriptorFile.getParentFile() 
@@ -90,7 +96,8 @@ object Main {
     var modulesStatus:Seq[ModuleStatus] = data.moduleDescriptors.map{path=> 
       ModuleStatus(
           descriptorPath = path,
-          maybeDescriptor = Try(parseDescriptor(path)).toOption)
+          maybeDescriptor = Try(parseDescriptor(path)).toOption,
+          errors = Seq())
     }
     
     
@@ -146,7 +153,13 @@ object Main {
   	  DependencyResolutionResult(resolutions)
   	}
     
-    def doBuild(descriptorPath:String, data:Data, out:PrintStream):ModuleStatus = {
+    case class DoBuildResult(status:ModuleStatus, depsPathsToBuild:Seq[String])
+    /**
+     * fold(moduleToBuild, previousBuildState, previousFsState, listOfDependenciesToBuild) => newBuildState, newListOfDependenciesToBuild
+     */
+    def doBuild(descriptorPath:String, data:Data, maybePrevState:Option[ModuleStatus], out:PrintStream):DoBuildResult = {
+      println(s"""#####################################
+                 |## Building $descriptorPath """.stripMargin)
       val paths = Paths(descriptorPath)
 
       val text = Source.fromFile(paths.moduleDescriptorFile).getLines.mkString("\n")
@@ -161,121 +174,39 @@ object Main {
         dependencyTree.flatten
       }
       
-      time("building " + label, out){
+      val errors = time("building " + label, out){
       	val buildMechanism = buildMechanisms(m.build)
-				buildMechanism.build(paths, dependencyTree, dependencies, m, out)
+				buildMechanism.build(paths, dependencyTree, dependencies, m, maybePrevState, out)
       }
-	     // let's assume this build resulted in a change to the artifact.  now we need to
-	    // build the downstream items
-	    buildDownstreamDependencies(m.id, data, out)
 	    
-      ModuleStatus(descriptorPath, maybeDescriptor=Some(m))
+      DoBuildResult(
+          ModuleStatus(descriptorPath, maybeDescriptor=Some(m), errors=errors),
+    	    buildDownstreamDependencies(m.id, data, out))
+          
      
     }
     
-    def buildDownstreamDependencies(updatedModuleId:ModuleId, data:Data, out:PrintStream){
-      data.moduleDescriptors.foreach{descriptorPath=>
+    def buildDownstreamDependencies(updatedModuleId:ModuleId, data:Data, out:PrintStream):Seq[String] = {
+      data.moduleDescriptors.filter{descriptorPath=>
         val m = parseDescriptor(descriptorPath)
   	    val dependencyTree = fullyResolveDependencies(m)
   	    val dependencies = dependencyTree.flatten
   	    
-  	    dependencies.foreach { d => 
+  	    
+  	    dependencies.exists { d => 
   	      if(updatedModuleId == d.spec.module){
   	        out.println(s""" I've just built a module (${updatedModuleId}) that is a dependency of another module (${m.id}).  Rebuilding the latter...""")
-  	        doBuild(descriptorPath, data, out)
-  	      }
+  	        true
+  	      }else false
   	    }
       }
     }
     
     def main(whatever: Array[String]) {
       
-      
-      
       val logPath = new File(iqDir, "log")
       val bytesOut = new FileOutputStream(logPath)
       val out = new PrintStream(bytesOut)
-      
-      case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
-        def needsBuild = (maybePrev, deltas) match {
-		      case (None, _) => true
-		      case (_, deltas) if !deltas.isEmpty => {
-			      out.println(s"Something changed:")
-  				  out.println(deltas.map{beforeAndAfter=>
-  				  	val (before, after) = beforeAndAfter
-  				  	
-  				  	val timeDiff = if(before.lastModified != after.lastModified ){
-  				  	  before.lastModified + " vs " + after.lastModified
-  				  	}else ""
-  				  	
-  				  	val fileDiff = if(before.isFile!=after.isFile ){
-  				  	  before.isFile  + " vs " + after.isFile
-  				  	}else ""
-  				  	
-  				  	before.path + " (" + timeDiff + fileDiff + ")"
-  				  }.mkString("    ", "\n    ", "\n"))
-			      true
-			    }
-		      case _ => false
-		    }
-      }
-      
-      def buildAsNeeded(data:Data, prevModulesState:Seq[ModuleStatus]):BuildResult = {
-        val moduleDescriptors = data.moduleDescriptors
-        val fsChanges = moduleDescriptors.map{descriptorPath=>
-          val paths = Paths(descriptorPath)
-          val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
-		      val fs = FSNode.forPath(paths.dir, {f => 
-		        f!=paths.targetDir && 
-		        !f.getName.equals("pom.xml") && // hack!
-		        !f.getName().startsWith(".")})
-  			  val deltas = maybePrev match {
-  			    case Some(prev) => fs.deltas(prev)
-  			    case None => Seq()
-  			  }
-		      Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(paths.pollingCache, fs);
-		      FilesystemChanges(
-		          descriptorPath = descriptorPath, 
-		          maybePrev = maybePrev, 
-		          currentState = fs, 
-		          deltas = deltas)
-        }
-        
-		    val results = fsChanges.map{changes=>
-          val prevState = prevModulesState.find(_.descriptorPath ==changes.descriptorPath)
-  	          
-  			  val nextState = if(prevState.isDefined && !changes.needsBuild) {
-  			    (false, prevState.get)
-  			  }else{
-  			    val newStatus = doBuild(changes.descriptorPath, data, out)
-  				  (true, newStatus)
-  			  }
-  			  
-  			  nextState
-	      }
-		    
-        BuildResult(
-            somethingChanged=results.exists(_._1 ), 
-            modulesStatus = results.map(_._2 ))
-      }
-      
-      
-      new Thread(){
-        override def run = while(true){
-          try{
-        	  val oldModulesStatus = modulesStatus
-        			  val result = buildAsNeeded(data, modulesStatus)
-        			  modulesStatus = result.modulesStatus 
-        			  if(result.somethingChanged){
-        				  println("notifying of changes")
-        				  Main.synchronized(Main.notifyAll)
-        			  }
-          }catch{
-            case t:Throwable => t.printStackTrace()
-          }
-	        Thread.sleep(200)
-        }
-      }.start();
       
       
       HttpObjectsJettyHandler.launchServer(33421, 
@@ -416,6 +347,193 @@ object Main {
             }
           }
       )
+      
+      
+      
+      case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
+        def needsBuild = (maybePrev, deltas) match {
+		      case (None, _) => true
+		      case (_, deltas) if !deltas.isEmpty => {
+			      out.println(s"Something changed:")
+  				  out.println(deltas.map{beforeAndAfter=>
+  				  	val (before, after) = beforeAndAfter
+  				  	
+  				  	val timeDiff = if(before.lastModified != after.lastModified ){
+  				  	  before.lastModified + " vs " + after.lastModified
+  				  	}else ""
+  				  	
+  				  	val fileDiff = if(before.isFile!=after.isFile ){
+  				  	  before.isFile  + " vs " + after.isFile
+  				  	}else ""
+  				  	
+  				  	before.path + " (" + timeDiff + fileDiff + ")"
+  				  }.mkString("    ", "\n    ", "\n"))
+			      true
+			    }
+		      case _ => false
+		    }
+      }
+      
+      
+      val filesystemChangesOverTime:Stream[Seq[FilesystemChanges]] = {
+        def scanForChanges():Stream[Seq[FilesystemChanges]]= {
+          println("Scanning...")
+          val moduleDescriptors = data.moduleDescriptors
+          val fsChanges = moduleDescriptors.map{descriptorPath=>
+            val paths = Paths(descriptorPath)
+            val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
+  		      val fs = FSNode.forPath(paths.dir, {f => 
+  		        f!=paths.targetDir && 
+  		        !f.getName.equals("pom.xml") && // hack!
+  		        !f.getName().startsWith(".")})
+    			  val deltas = maybePrev match {
+    			    case Some(prev) => fs.deltas(prev)
+    			    case None => Seq()
+    			  }
+  		      Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(paths.pollingCache, fs);
+  		      
+  		      if(!deltas.isEmpty){
+  		        println("Something changed")
+  		      }
+		        Thread.sleep(200)
+		         
+  		      FilesystemChanges(
+  		          descriptorPath = descriptorPath, 
+  		          maybePrev = maybePrev, 
+  		          currentState = fs, 
+  		          deltas = deltas)
+          }
+          Stream.cons(fsChanges, scanForChanges())
+        }
+        
+        scanForChanges()
+      }
+      
+      
+      def initialState(data:Data):BuildResult = {
+        BuildResult(
+              modulesStatus = data.moduleDescriptors.map{path=> 
+                ModuleStatus(
+                    descriptorPath = path,
+                    maybeDescriptor = Try(parseDescriptor(path)).toOption,
+                    errors = Seq())})
+      }
+      
+      /*
+       * 
+       * val outsideChanges:Stream[Seq[FileSystemChanges]]
+       * 
+       * outsideChanges.fold(initialBuildState(ModuleStatus, remainder=Seq())){OverallState(moduleStatuses, remainder), fsChanges => 
+       * 	
+       * }
+       * 
+       * fold((fsChanges))
+       */
+      
+      
+//      new Thread(){
+//        override def run = while(true){
+//          try{
+//        	  val oldModulesStatus = modulesStatus
+//    			  val result = buildAsNeeded(data, modulesStatus)
+//    			  modulesStatus = result.modulesStatus 
+//    			  if(result.somethingChanged){
+//    				  println("notifying of changes")
+//    				  Main.synchronized(Main.notifyAll)
+//    			  }
+//          }catch{
+//            case t:Throwable => t.printStackTrace()
+//          }
+//	        Thread.sleep(200)
+//        }
+//      }.start();
+      
+      
+      
+      def respondToFilesystemChanges(previousBuild:BuildResult, fsChanges:Seq[FilesystemChanges]):BuildResult = {
+        val filesChanged = fsChanges.flatMap(_.deltas).map(_._1.path)
+        println(filesChanged.size + " files changed: " + filesChanged.mkString("\n    ", ",\n    ", "\n"))
+        val moduleDescriptors = data.moduleDescriptors
+        
+        case class AffectedModule(descriptorPath:String, reasonsForBuild:Seq[String])
+        
+        val changesRequiringRebuild = fsChanges.flatMap{changes=>
+          val prevState = previousBuild.modulesStatus.find(_.descriptorPath ==changes.descriptorPath)
+          
+          val maybeReasonToBuild = if(changes.needsBuild){
+            Some("files changed")
+//          }else if(!prevState.isDefined){
+//            Some("hasn't been built yet")
+          }else{
+            None
+          }
+          
+          maybeReasonToBuild.map{reason=> AffectedModule(changes.descriptorPath, Seq(reason))}
+        }
+        
+        
+        case class BuildPass(affectedModules:Seq[AffectedModule], moduleStates:Seq[ModuleStatus])
+        
+        def buildAffected(input:BuildPass):Stream[BuildPass] = {
+          
+          
+          val deDupedReasoning = input.affectedModules.foldLeft(Map[String, Seq[String]]()){(reasonsByDescriptorPath, nextReason) => 
+            val otherReasons = reasonsByDescriptorPath.getOrElse(nextReason.descriptorPath, Seq())
+            
+            val allReasons = otherReasons ++ nextReason.reasonsForBuild
+            
+            
+            reasonsByDescriptorPath + (nextReason.descriptorPath -> allReasons)
+          }.map{case (path, reasons) => AffectedModule(path, reasons)}
+          
+          val affectedModules = deDupedReasoning
+          
+          println("Building " + affectedModules.size + " affected modules:")
+          affectedModules.foreach{m=>
+            println("    " + m.descriptorPath)
+            m.reasonsForBuild.foreach { reason => 
+              println("        " + reason)  
+            }
+          }
+          val results = input.affectedModules.map{affMod=>
+            val prevState = input.moduleStates.find(_.descriptorPath == affMod.descriptorPath)
+  			    doBuild(affMod.descriptorPath, data, prevState, out)
+          } 
+          val affectedByThisBuildPass = results.flatMap{result=> 
+            result.depsPathsToBuild.map{pathToBuild=> 
+              AffectedModule(pathToBuild, Seq("Dependency " + result.status.descriptorPath + " was built"))}
+          }
+          
+          val nextPass = BuildPass(affectedByThisBuildPass, results.map(_.status))
+          
+          if(nextPass.affectedModules.isEmpty){
+            Stream.cons(nextPass, Stream.Empty)
+          }else{
+            println("Still more deps to build")
+            Stream.cons(nextPass, buildAffected(nextPass))
+          }
+        }
+        
+        
+        
+        val buildPasses = buildAffected(BuildPass(
+          affectedModules = changesRequiringRebuild,
+          moduleStates = previousBuild.modulesStatus
+        ))
+        
+        val finalPass = buildPasses.last
+        
+        val result = BuildResult(
+            modulesStatus = finalPass.moduleStates)
+        
+            
+        // TODO: need to fold over the full set of module states, but we're not for some reason
+        result
+      }
+      
+      
+      // should never finish ... this is our "loop"
+      val finalBuildState = filesystemChangesOverTime.foldLeft(initialState(data))(respondToFilesystemChanges)
     }
     
     private def time[T](name:String, out:PrintStream)(fn: =>T):T = {

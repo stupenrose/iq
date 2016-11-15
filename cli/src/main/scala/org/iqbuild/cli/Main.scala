@@ -34,7 +34,8 @@ object Main {
     "include" -> include _,
     "remove" -> remove _,
     "list" -> list _,
-    "dependencies" -> dependencies _)
+    "dependencies" -> dependencies _, 
+    "run" -> run _)
     
   val usage = "Commands I know are:\n    " + commands.keys.mkString(",\n    ")
   
@@ -52,6 +53,10 @@ object Main {
         }
         
 	}
+  
+  def run(args:Seq[String]){
+    org.iqbuild.Main.main(Array())
+  }
   
   def dependencies(args:Seq[String]){
     
