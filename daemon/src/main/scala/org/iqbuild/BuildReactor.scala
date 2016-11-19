@@ -11,16 +11,33 @@ class BuildReactor(
     val parseDescriptor:String=>ModuleDescriptor, 
     val out:PrintStream) {
   
-  def blockUntilAllInputHasBeenProcessed(externalChanges:Stream[ReactorState]):BuildResult = {
+  
+  
+  def blockUntilAllInputHasBeenProcessed(externalChanges:Stream[ReactorState]):Stream[BuildResult] = {
+    
+    def nextBuild(externalChanges:Stream[ReactorState],  previousBuild:BuildResult):Stream[BuildResult] = {
+      
+      externalChanges.headOption match {
+        case Some(changes) => {
+          val result = respondToFilesystemChanges(out, previousBuild, changes)
+          Stream.cons(result, nextBuild(externalChanges.tail, result))
+        }
+
+        case None => Stream.Empty
+      }
+      
+    }
+    
     val initialState = BuildResult(
-            modulesStatus = externalChanges.head.data.moduleDescriptors.map{path=> 
+            modulesStatus = Seq()/*externalChanges.head.data.moduleDescriptors.map{path=> 
               ModuleStatus(
                   descriptorPath = path,
                   maybeDescriptor = Try(parseDescriptor(path)).toOption,
-                  errors = Seq())})
+                  errors = Seq())}*/)
     
-    // should never finish ... this is our "loop"
-    externalChanges.foldLeft(initialState)(respondToFilesystemChanges(out, _, _))
+//    // should never finish ... this is our "loop"
+//    externalChanges.foldLeft(initialState)(respondToFilesystemChanges(out, _, _))
+    nextBuild(externalChanges, initialState)
   }
   
   def respondToFilesystemChanges(out:PrintStream, previousBuild:BuildResult, state:ReactorState):BuildResult = {
@@ -33,12 +50,8 @@ class BuildReactor(
         case class AffectedModule(descriptorPath:String, reasonsForBuild:Seq[String])
         
         val changesRequiringRebuild = fsChanges.flatMap{changes=>
-          val prevState = previousBuild.modulesStatus.find(_.descriptorPath ==changes.descriptorPath)
-          
           val maybeReasonToBuild = if(changes.needsBuild){
-            Some("files changed")
-//          }else if(!prevState.isDefined){
-//            Some("hasn't been built yet")
+            Some("whatever")//TODO: Should be "files changed"
           }else{
             None
           }
@@ -52,31 +65,33 @@ class BuildReactor(
         def buildAffected(input:BuildPass):Stream[BuildPass] = {
           
           
-          val deDupedReasoning = input.affectedModules.foldLeft(Map[String, Seq[String]]()){(reasonsByDescriptorPath, nextReason) => 
-            val otherReasons = reasonsByDescriptorPath.getOrElse(nextReason.descriptorPath, Seq())
-            
-            val allReasons = otherReasons ++ nextReason.reasonsForBuild
-            
-            
-            reasonsByDescriptorPath + (nextReason.descriptorPath -> allReasons)
-          }.map{case (path, reasons) => AffectedModule(path, reasons)}
+//          val deDupedReasoning = input.affectedModules.foldLeft(Map[String, Seq[String]]()){(reasonsByDescriptorPath, nextReason) => 
+//            val otherReasons = reasonsByDescriptorPath.getOrElse(nextReason.descriptorPath, Seq())
+//            
+//            val allReasons = otherReasons ++ nextReason.reasonsForBuild
+//            
+//            
+//            reasonsByDescriptorPath + (nextReason.descriptorPath -> allReasons)
+//          }.map{case (path, reasons) => AffectedModule(path, reasons)}
           
-          val affectedModules = deDupedReasoning
+          val affectedModules = input.affectedModules//deDupedReasoning
           
-          println("Building " + affectedModules.size + " affected modules:")
-          affectedModules.foreach{m=>
-            println("    " + m.descriptorPath)
-            m.reasonsForBuild.foreach { reason => 
-              println("        " + reason)  
-            }
-          }
+//          println("Building " + affectedModules.size + " affected modules:")
+//          affectedModules.foreach{m=>
+//            println("    " + m.descriptorPath)
+//            m.reasonsForBuild.foreach { reason => 
+//              println("        " + reason)  
+//            }
+//          }
           val results = input.affectedModules.map{affMod=>
             val prevState = input.moduleStates.find(_.descriptorPath == affMod.descriptorPath)
   			    doBuild(affMod.descriptorPath, data, prevState, out)
           } 
           val affectedByThisBuildPass = results.flatMap{result=> 
             result.depsPathsToBuild.map{pathToBuild=> 
-              AffectedModule(pathToBuild, Seq("Dependency " + result.status.descriptorPath + " was built"))}
+              AffectedModule(pathToBuild, 
+                  Seq()
+                  /*Seq("Dependency " + result.status.descriptorPath + " was built")*/)}
           }
           
           val nextPass = BuildPass(affectedByThisBuildPass, results.map(_.status))
@@ -93,7 +108,7 @@ class BuildReactor(
         
         val buildPasses = buildAffected(BuildPass(
           affectedModules = changesRequiringRebuild,
-          moduleStates = previousBuild.modulesStatus
+          moduleStates = Seq()//previousBuild.modulesStatus
         ))
         
         val finalPass = buildPasses.last
@@ -101,7 +116,6 @@ class BuildReactor(
         val result = BuildResult(
             modulesStatus = finalPass.moduleStates)
         
-            
         // TODO: need to fold over the full set of module states, but we're not for some reason
         result
       }
@@ -140,11 +154,12 @@ class BuildReactor(
     }
     
     def buildDownstreamDependencies(updatedModuleId:ModuleId, data:Data, out:PrintStream):Seq[String] = {
+      
       data.moduleDescriptors.filter{descriptorPath=>
         val m = parseDescriptor(descriptorPath)
   	    val dependencyTree = fullyResolveDependencies(m)
   	    val dependencies = dependencyTree.flatten
-  	    
+  	    println(s"BUILDING ${dependencies.size} DEPENDENCIES")
   	    dependencies.exists { d => 
   	      if(updatedModuleId == d.spec.module){
   	        out.println(s""" I've just built a module (${updatedModuleId}) that is a dependency of another module (${m.id}).  Rebuilding the latter...""")
