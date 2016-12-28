@@ -54,32 +54,36 @@ class BuildReactor(
         }
         
         
-        case class BuildPass(affectedModules:Seq[AffectedModule], moduleStates:Seq[ModuleStatus])
+        case class BuildPass(affectedModules:Seq[AffectedModule], moduleStates:Seq[ModuleStatus], maybePreviousPass:Option[BuildPass])
         
         def buildAffected(input:BuildPass):Stream[BuildPass] = {
           
-          
-//          val deDupedReasoning = input.affectedModules.foldLeft(Map[String, Seq[String]]()){(reasonsByDescriptorPath, nextReason) => 
-//            val otherReasons = reasonsByDescriptorPath.getOrElse(nextReason.descriptorPath, Seq())
-//            
-//            val allReasons = otherReasons ++ nextReason.reasonsForBuild
-//            
-//            
-//            reasonsByDescriptorPath + (nextReason.descriptorPath -> allReasons)
-//          }.map{case (path, reasons) => AffectedModule(path, reasons)}
-          
           val affectedModules = input.affectedModules//deDupedReasoning
           
-//          println("Building " + affectedModules.size + " affected modules:")
-//          affectedModules.foreach{m=>
-//            println("    " + m.descriptorPath)
-//            m.reasonsForBuild.foreach { reason => 
-//              println("        " + reason)  
-//            }
-//          }
+          def hasBuilt(descriptorPath:String, pass:BuildPass):Boolean = {
+            val x = pass.affectedModules.exists { x => x.descriptorPath == descriptorPath }
+            val y = pass.maybePreviousPass.map(hasBuilt(descriptorPath, _)).getOrElse(false)
+            x || y
+          }
+          
           val results = input.affectedModules.map{affMod=>
-            val prevState = input.moduleStates.find(_.descriptorPath == affMod.descriptorPath)
-  			    doBuild(affMod.reasonsForBuild, affMod.descriptorPath, data, prevState, out)
+            
+            val hasAlreadyBeenBuilt = input.maybePreviousPass.map(hasBuilt(affMod.descriptorPath, _)).getOrElse(false)
+            if(hasAlreadyBeenBuilt){
+              println("Already built!")
+              DoBuildResult(status = ModuleStatus(
+                    descriptorPath = affMod.descriptorPath, 
+                    maybeDescriptor = None,
+                    errors = Seq(ModuleBuildError(
+                          path = affMod.descriptorPath, 
+                          where = "Dependencies", 
+                          description = "Circular dependency"))), 
+                    depsPathsToBuild = Seq())
+            }else{
+              val prevState = input.moduleStates.find(_.descriptorPath == affMod.descriptorPath)
+              doBuild(affMod.reasonsForBuild, affMod.descriptorPath, data, prevState, out)
+            }
+  			    
           } 
           val affectedByThisBuildPass = results.flatMap{result=> 
             result.depsPathsToBuild.map{pathToBuild=> 
@@ -88,7 +92,7 @@ class BuildReactor(
                   /*Seq("Dependency " + result.status.descriptorPath + " was built")*/)}
           }
           
-          val nextPass = BuildPass(affectedByThisBuildPass, results.map(_.status))
+          val nextPass = BuildPass(affectedByThisBuildPass, results.map(_.status), Some(input))
           
           if(nextPass.affectedModules.isEmpty){
             Stream.cons(nextPass, Stream.Empty)
@@ -98,11 +102,10 @@ class BuildReactor(
           }
         }
         
-        
-        
         val buildPasses = buildAffected(BuildPass(
           affectedModules = changesRequiringRebuild,
-          moduleStates = Seq()//previousBuild.modulesStatus
+          moduleStates = Seq(),
+          None
         ))
         
         val finalPass = buildPasses.last
@@ -148,17 +151,17 @@ class BuildReactor(
 //        def dependsOnMe() = {
 //          
 //        }
-        val circularDeps = otherModules.filter{case (path, f) => f.dependencies.map(_.spec.module).contains(m.id)}
-        println(prettyString(otherModules) + " vs " + prettyString(circularDeps))
+//        val circularDeps = otherModules.filter{case (path, f) => f.dependencies.map(_.spec.module).contains(m.id)}
+//        println(prettyString(otherModules) + " vs " + prettyString(circularDeps))
         
-        if(circularDeps.isEmpty){
+//        if(circularDeps.isEmpty){
         	val buildMechanism = buildMechanisms(m.build)
           println("No Error!!!")
   				buildMechanism.build(buildReasons, paths, dependencyTree, dependencies, m, maybePrevState, out)
-        }else{
-          println("Error!!!")
-          Seq(ModuleBuildError(path=paths.moduleDescriptorFile.getAbsolutePath, "Descriptor",  "Circular Dependencies"))
-        }
+//        }else{
+//          println("Error!!!")
+//          Seq(ModuleBuildError(path=paths.moduleDescriptorFile.getAbsolutePath, "Descriptor",  "Circular Dependencies"))
+//        }
       }
 	    
       DoBuildResult(
