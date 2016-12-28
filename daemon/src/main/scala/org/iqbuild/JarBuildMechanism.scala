@@ -20,7 +20,7 @@ object JarBuild extends BuildMechanism {
       }
       
       
-      override def build(paths:Paths, tree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, 
+      override def build(buildReasons:Seq[String], paths:Paths, tree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor, 
 	          maybePreviousState:Option[ModuleStatus], out:PrintStream) = {
         val path = paths.dir
         val javaFiles = new File(path, "src")

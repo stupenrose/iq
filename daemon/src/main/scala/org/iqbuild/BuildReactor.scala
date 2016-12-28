@@ -20,6 +20,7 @@ class BuildReactor(
       externalChanges.headOption match {
         case Some(changes) => {
           val result = respondToFilesystemChanges(out, previousBuild, changes)
+          
           Stream.cons(result, nextBuild(externalChanges.tail, result))
         }
 
@@ -28,15 +29,8 @@ class BuildReactor(
       
     }
     
-    val initialState = BuildResult(
-            modulesStatus = Seq()/*externalChanges.head.data.moduleDescriptors.map{path=> 
-              ModuleStatus(
-                  descriptorPath = path,
-                  maybeDescriptor = Try(parseDescriptor(path)).toOption,
-                  errors = Seq())}*/)
+    val initialState = BuildResult(modulesStatus = Seq())
     
-//    // should never finish ... this is our "loop"
-//    externalChanges.foldLeft(initialState)(respondToFilesystemChanges(out, _, _))
     nextBuild(externalChanges, initialState)
   }
   
@@ -85,7 +79,7 @@ class BuildReactor(
 //          }
           val results = input.affectedModules.map{affMod=>
             val prevState = input.moduleStates.find(_.descriptorPath == affMod.descriptorPath)
-  			    doBuild(affMod.descriptorPath, data, prevState, out)
+  			    doBuild(affMod.reasonsForBuild, affMod.descriptorPath, data, prevState, out)
           } 
           val affectedByThisBuildPass = results.flatMap{result=> 
             result.depsPathsToBuild.map{pathToBuild=> 
@@ -122,38 +116,59 @@ class BuildReactor(
   
   
     case class DoBuildResult(status:ModuleStatus, depsPathsToBuild:Seq[String])
-    /**
-     * fold(moduleToBuild, previousBuildState, previousFsState, listOfDependenciesToBuild) => newBuildState, newListOfDependenciesToBuild
-     */
-    def doBuild(descriptorPath:String, data:Data, maybePrevState:Option[ModuleStatus], out:PrintStream):DoBuildResult = {
+    
+    def doBuild(buildReasons:Seq[String], descriptorPath:String, data:Data, maybePrevState:Option[ModuleStatus], out:PrintStream):DoBuildResult = {
       println(s"""#####################################
                  |## Building $descriptorPath """.stripMargin)
       val paths = Paths(descriptorPath)
-
-      val m = parseDescriptor(paths.moduleDescriptorFile.getAbsolutePath)
+      
+      case class Foo(m:ModuleDescriptor, dependencyTree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency])
+      val fooByPath = data.moduleDescriptors.map{path=> 
+        val descriptor = parseDescriptor(path)
+        val dependencyTree = time("Resolving dependencies for " + descriptor.id, out){
+  	      fullyResolveDependencies(descriptor)
+        }
+        val dependencies = time("processing dependency tree", out){
+          dependencyTree.flatten
+        }
+        path->Foo(descriptor, dependencyTree, dependencies)}.toMap
+      
+      val Foo(m, dependencyTree, dependencies) = fooByPath(paths.moduleDescriptorFile.getAbsolutePath)
       val label = m.id
       
-      val dependencyTree = time("Resolving dependencies for " + label, out){
-	      fullyResolveDependencies(m)
-      }
       
-      val dependencies = time("processing dependency tree", out){
-        dependencyTree.flatten
-      }
       
       val errors = time("building " + label, out){
-      	val buildMechanism = buildMechanisms(m.build)
-				buildMechanism.build(paths, dependencyTree, dependencies, m, maybePrevState, out)
+        val otherModules = fooByPath.filterNot{case (path, _) => path == paths.moduleDescriptorFile.getAbsolutePath}
+        println(otherModules.size + " vs " + fooByPath.size)
+        
+        val prettyString = Jackson.jackson.writer.withDefaultPrettyPrinter().writeValueAsString _
+        
+        // this needs to become a recursive/deep search through the entire dependency tree to see if we end up back here
+//        def dependsOnMe() = {
+//          
+//        }
+        val circularDeps = otherModules.filter{case (path, f) => f.dependencies.map(_.spec.module).contains(m.id)}
+        println(prettyString(otherModules) + " vs " + prettyString(circularDeps))
+        
+        if(circularDeps.isEmpty){
+        	val buildMechanism = buildMechanisms(m.build)
+          println("No Error!!!")
+  				buildMechanism.build(buildReasons, paths, dependencyTree, dependencies, m, maybePrevState, out)
+        }else{
+          println("Error!!!")
+          Seq(ModuleBuildError(path=paths.moduleDescriptorFile.getAbsolutePath, "Descriptor",  "Circular Dependencies"))
+        }
       }
 	    
       DoBuildResult(
           ModuleStatus(descriptorPath, maybeDescriptor=Some(m), errors=errors),
-    	    buildDownstreamDependencies(m.id, data, out))
+    	    findDownstreamDependencies(m.id, data, out))
           
      
     }
     
-    def buildDownstreamDependencies(updatedModuleId:ModuleId, data:Data, out:PrintStream):Seq[String] = {
+    def findDownstreamDependencies(updatedModuleId:ModuleId, data:Data, out:PrintStream):Seq[String] = {
       
       data.moduleDescriptors.filter{descriptorPath=>
         val m = parseDescriptor(descriptorPath)

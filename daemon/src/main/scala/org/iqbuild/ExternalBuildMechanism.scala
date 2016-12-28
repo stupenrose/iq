@@ -29,7 +29,7 @@ class ExternalBuildMechanism(val name:String, val port:Int, val cmd:String) exte
     }
   })
   
-	def build(paths:Paths, tree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor,
+	def build(buildReasons:Seq[String], paths:Paths, tree:DependencyResolutionResult, dependencies:Seq[ResolvedDependency], m:ModuleDescriptor,
 	          maybePreviousState:Option[ModuleStatus], out:PrintStream) = {
     val data = GenericBuildJson(
         paths = paths,

@@ -12,6 +12,7 @@ trait BuildMechanism {
 	          /*
 	           * Input
 	           */
+	          buildReasons:Seq[String],
 	          paths:Paths, 
 	          tree:DependencyResolutionResult, 
 	          dependencies:Seq[ResolvedDependency], 

@@ -71,8 +71,6 @@ class BuildReactorTest extends FunSuite {
           errors = List()))))
   }
   
-  
-  
   test("Doesn't invoke the build when files stay the same"){
     
     // input
@@ -150,6 +148,7 @@ class BuildReactorTest extends FunSuite {
     val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
     
     // then
+    println(Jackson.jackson.writer.withDefaultPrettyPrinter().writeValueAsString(result.toList))
     assert(build.invocations.size == 2)
     assert(build.invocations.map{bi=> bi.m} == ListBuffer(dependency._2, dependent._2))
     assert(result.last == BuildResult(List(
@@ -158,6 +157,7 @@ class BuildReactorTest extends FunSuite {
           maybeDescriptor = Some(dependent._2),
           errors = List()))))
   }
+  
   test("Builds transitive dependencies"){
     
     // input
@@ -217,15 +217,100 @@ class BuildReactorTest extends FunSuite {
           maybeDescriptor = Some(dependent._2),
           errors = List()))))
   }
+  
+  
+  
+  test("Detects circular dependencies"){
+    
+    // input
+    val bytesOut = new ByteArrayOutputStream
+    val out = new PrintStream(bytesOut)
+    
+    val build = new FakeBuildMechanism(errors=Seq()){
+//          var shortCircuited = false;
+//          
+//        	override def build(buildReasons:Seq[String],
+//  	          paths:Paths, 
+//  	          tree:DependencyResolutionResult, 
+//  	          dependencies:Seq[ResolvedDependency], 
+//  	          m:ModuleDescriptor, 
+//  	          maybePreviousState:Option[ModuleStatus],
+//  	          out:PrintStream
+//  	          ):Seq[ModuleBuildError] = {
+//        	  if(invocations.exists { x => x.m.id == m.id }){
+//        	    shortCircuited = true
+//        	    throw new Exception("Test failed ... short circuiting")
+//        	  }
+//        	  super.build(buildReasons, paths, tree, dependencies, m, maybePreviousState, out)
+//        	}
+    }
+    val idA = ModuleId(group = "mygroup", name="a")
+    val idB = ModuleId(group = "mygroup", name="b")
+    
+    val a = "/mymodules/a/module.iq" -> ModuleDescriptor(
+                                id = idA, 
+                                build = "funky", 
+                                deps = Seq(DependencySpec(module=idB)))
+    val b = "/mymodules/b/module.iq" -> ModuleDescriptor(
+                                id = idB, 
+                                build = "funky", 
+                                deps = Seq(DependencySpec(module=idA)))
+    
+    val paths = Map(a, b)
+                                
+    val reactor = new BuildReactor(
+          buildMechanisms = Map("funky"->build), 
+          parseDescriptor = {path=> paths.get(path).getOrElse(throw new Exception("No Such File: " + path))},
+          fullyResolveDependencies = {m:ModuleDescriptor=>
+            
+            val Some((path, _)) = paths.find{case (path, d) => d == m}
+            
+            DependencyResolutionResult(
+                m.deps.map{d=>ResolvedDependency(url=path, d.copy(version = Some(Constants.INTERNAL_VERSION)), transitives=Seq())}
+                )},
+          out = out)
+    val data = Data(paths.keys.toSeq)
+    
+    val changedPath = a._1
+    val fsChanges = FilesystemChanges(descriptorPath = changedPath, 
+        maybePrev = None, 
+        currentState = FSNode(
+                  path = changedPath, 
+                  lastModified = 0, 
+                  isFile = true, 
+                  children = Seq()),
+        deltas = Seq()) 
+    val externalChanges = Stream(ReactorState(fsChanges = Seq(fsChanges), data = data))
+    
+    // when
+    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    
+    // then
+    assert(build.invocations.size == 0)
+    assert(result.head == BuildResult(List(
+      ModuleStatus(
+          descriptorPath = a._1,
+          maybeDescriptor = Some(a._2),
+          errors = List(ModuleBuildError(path = a._1, where = "Dependencies", description = "Circular dependency"))),
+      ModuleStatus(
+          descriptorPath = b._1,
+          maybeDescriptor = Some(b._2),
+          errors = List(ModuleBuildError(path = b._1, where = "Dependencies", description = "Circular dependency")))
+          )))
+  }
+  
+  
   class FakeBuildMechanism(val errors:Seq[ModuleBuildError]) extends BuildMechanism {
-    case class BuildInvocation(paths:Paths, 
+    case class BuildInvocation(
+              buildReasons:Seq[String], 
+              paths:Paths, 
   	          tree:DependencyResolutionResult, 
   	          dependencies:Seq[ResolvedDependency], 
   	          m:ModuleDescriptor, 
   	          maybePreviousState:Option[ModuleStatus],
   	          out:PrintStream)
     val invocations = ListBuffer[BuildInvocation]()
-  	def build(
+  	def build(buildReasons:Seq[String],
   	          paths:Paths, 
   	          tree:DependencyResolutionResult, 
   	          dependencies:Seq[ResolvedDependency], 
@@ -235,7 +320,7 @@ class BuildReactorTest extends FunSuite {
   	          ):Seq[ModuleBuildError] = {
   	  
       println("Fake Build Invoked")
-  	  invocations.append(BuildInvocation(paths=paths, tree=tree, dependencies=dependencies,
+  	  invocations.append(BuildInvocation(buildReasons = buildReasons, paths=paths, tree=tree, dependencies=dependencies,
   	      m = m,
   	      maybePreviousState = maybePreviousState,
   	      out = out))
