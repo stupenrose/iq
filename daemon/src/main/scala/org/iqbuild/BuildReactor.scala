@@ -87,9 +87,7 @@ class BuildReactor(
           } 
           val affectedByThisBuildPass = results.flatMap{result=> 
             result.depsPathsToBuild.map{pathToBuild=> 
-              AffectedModule(pathToBuild, 
-                  Seq()
-                  /*Seq("Dependency " + result.status.descriptorPath + " was built")*/)}
+              AffectedModule(pathToBuild, Seq())}
           }
           
           val nextPass = BuildPass(affectedByThisBuildPass, results.map(_.status), Some(input))
@@ -147,21 +145,9 @@ class BuildReactor(
         
         val prettyString = Jackson.jackson.writer.withDefaultPrettyPrinter().writeValueAsString _
         
-        // this needs to become a recursive/deep search through the entire dependency tree to see if we end up back here
-//        def dependsOnMe() = {
-//          
-//        }
-//        val circularDeps = otherModules.filter{case (path, f) => f.dependencies.map(_.spec.module).contains(m.id)}
-//        println(prettyString(otherModules) + " vs " + prettyString(circularDeps))
-        
-//        if(circularDeps.isEmpty){
         	val buildMechanism = buildMechanisms(m.build)
           println("No Error!!!")
   				buildMechanism.build(buildReasons, paths, dependencyTree, dependencies, m, maybePrevState, out)
-//        }else{
-//          println("Error!!!")
-//          Seq(ModuleBuildError(path=paths.moduleDescriptorFile.getAbsolutePath, "Descriptor",  "Circular Dependencies"))
-//        }
       }
 	    
       DoBuildResult(

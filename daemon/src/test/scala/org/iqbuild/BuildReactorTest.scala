@@ -149,7 +149,6 @@ class BuildReactorTest extends FunSuite {
     val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
     
     // then
-//    println(Jackson.jackson.writer.withDefaultPrettyPrinter().writeValueAsString(result.toList))
     assert(build.invocations.size == 2)
     assert(build.invocations.map{bi=> bi.m} == ListBuffer(dependency._2, dependent._2))
     assert(result.last == BuildResult(List(
@@ -227,24 +226,7 @@ class BuildReactorTest extends FunSuite {
     val bytesOut = new ByteArrayOutputStream
     val out = new PrintStream(bytesOut)
     
-    val build = new FakeBuildMechanism(errors=Seq()){
-//          var shortCircuited = false;
-//          
-//        	override def build(buildReasons:Seq[String],
-//  	          paths:Paths, 
-//  	          tree:DependencyResolutionResult, 
-//  	          dependencies:Seq[ResolvedDependency], 
-//  	          m:ModuleDescriptor, 
-//  	          maybePreviousState:Option[ModuleStatus],
-//  	          out:PrintStream
-//  	          ):Seq[ModuleBuildError] = {
-//        	  if(invocations.exists { x => x.m.id == m.id }){
-//        	    shortCircuited = true
-//        	    throw new Exception("Test failed ... short circuiting")
-//        	  }
-//        	  super.build(buildReasons, paths, tree, dependencies, m, maybePreviousState, out)
-//        	}
-    }
+    val build = new FakeBuildMechanism(errors=Seq())
     val idA = ModuleId(group = "mygroup", name="a")
     val idB = ModuleId(group = "mygroup", name="b")
     
@@ -291,15 +273,9 @@ class BuildReactorTest extends FunSuite {
     assert(result.head == BuildResult(List(
       ModuleStatus(
           descriptorPath = a._1,
-          maybeDescriptor = None, //Some(a._2),
+          maybeDescriptor = None, 
           errors = List(ModuleBuildError(path = a._1, where = "Dependencies", description = "Circular dependency")))
-//          ,
-//      ModuleStatus(
-//          descriptorPath = b._1,
-//          maybeDescriptor = None, //Some(b._2),
-//          errors = List(ModuleBuildError(path = b._1, where = "Dependencies", description = "Circular dependency")))
-          )
-          ))
+          )))
   }
   
   
