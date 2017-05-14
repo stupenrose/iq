@@ -13,11 +13,6 @@ import org.apache.commons.httpclient.methods.GetMethod
 import java.io.FileOutputStream
 import org.apache.commons.io.FileUtils
 import org.joda.time.Instant
-import org.httpobjects.jetty.HttpObjectsJettyHandler
-import org.httpobjects.HttpObject
-import org.httpobjects.Request
-import org.httpobjects.DSL._
-import org.httpobjects.util.HttpObjectUtil
 import java.io.PrintStream
 import java.io.ByteArrayOutputStream
 import java.io.PipedInputStream
@@ -30,6 +25,7 @@ import scala.util.Try
 import java.io.PrintWriter
 import org.httpobjects.Response
 import org.iqbuild.maven.PomGenerator
+import org.iqbuild.http.HttpInterface
 
 
 case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
@@ -73,7 +69,24 @@ case class Paths(val descriptorPath:String){
       pollingCache.getParentFile.mkdirs()
     }
 
+trait Guts {
+  def logPath:File
+  def save(d:Data):Unit
+  def data:Data
+  def modulesStatus:Seq[ModuleStatus]
+  def iqDir:File
+  def fullyResolveAll(specs:Seq[DependencySpec]):Seq[ResolvedDependency]
+  def remove(descriptorPath:String)
+  def fullyResolveDependencies(m:ModuleDescriptor):DependencyResolutionResult
+}
+
 object Main {
+    def main(whatever2: Array[String]) {
+      new Daemon()
+    }
+}
+    
+class Daemon extends Guts {
     val buildMechanisms:Map[String, BuildMechanism] = Map(
         "jar" -> JarBuild,
         "node" -> new ExternalBuildMechanism(
@@ -108,6 +121,7 @@ object Main {
       Data()
     }
       
+    
     def save(d:Data){
       Jackson.jackson.writer.withDefaultPrettyPrinter().writeValue(dataFilePath, d)
       this.data = d
@@ -179,205 +193,63 @@ object Main {
     }
     
     
+    def remove(descriptorPath:String) = {
+      save(data.copy(moduleDescriptors = data.moduleDescriptors.filterNot(_ == descriptorPath)))
+      modulesStatus = modulesStatus.filterNot(_.descriptorPath == descriptorPath)
+    }
+      
+    val logPath = new File(iqDir, "log")
+    val bytesOut = new FileOutputStream(logPath)
+    val out = new PrintStream(bytesOut)
     
+    new HttpInterface(this)
     
-    def main(whatever: Array[String]) {
-      
-      val logPath = new File(iqDir, "log")
-      val bytesOut = new FileOutputStream(logPath)
-      val out = new PrintStream(bytesOut)
-      
-      
-      HttpObjectsJettyHandler.launchServer(33421, 
-          new HttpObject("/"){
-    	  	override def get(req:Request) = OK(Html(
-    	  	    <html>
-    	  		  <body>
-    	  				<h1>iqbuild [{iqDir.getAbsolutePath}]</h1>
-    	  				{data.moduleDescriptors.map{f=>
-    	  				  	<div>{f}</div>
-    	  				}}
-    	  		  </body>
-    	  	    </html>.toString
-    	  	))
-          },
-          new HttpObject("/modules"){
-      	  	override def get(req:Request) = {
-      	  	  val matchingModules = req.query().valueFor("path") match {
-      	  	    case null=>modulesStatus
-      	  	    case p:String=>modulesStatus.filter(_.descriptorPath  ==p)
-      	  	  }
-      	  	  
-      	  	  val results = matchingModules.map{handler=>
-      	  	    val id = handler.maybeDescriptor match {
-      	  	      case None=>None
-      	  	      case Some(descriptor)=>Some(descriptor.id.toString) 
-      	  	    }
-      	  	    ModuleListItem(handler.descriptorPath, id.getOrElse(null))
-      	  	  }
-      	  	  
-      	  	  
-      	  	  OK(Json(Jackson.jackson.writerWithDefaultPrettyPrinter().writeValueAsString(results)))
-      	  	}
-      	  	override def post(req:Request) = {
-      	  	  val path = HttpObjectUtil.toAscii(req.representation())
-      	  	  val p = new File(path)
-      	  	  
-      	  	  val maybeDescriptor = try {
-  	  	        val text = Source.fromFile(p).getLines.mkString("\n")
-  	  	        Some(ModuleDescriptor.parse(text))
-  	  	      }catch{
-  	  	        case e:Throwable => None
-  	  	      }
-      	  	  
-  	  	      maybeDescriptor match {
-  	  	        case None => BAD_REQUEST(Text("Unable to read/parse descriptor at" + p.getAbsolutePath()))
-  	  	        case Some(d) => {
-    	    	  	  save(data.copy(moduleDescriptors = data.moduleDescriptors.toList :+ path))
-    	    	  	  OK(Text("Added " + d.id))
-  	  	        }
-  	  	      }
-      	  	}
-          },
-          new HttpObject("/modules/{moduleId}/dependencies"){
-      	  	override def get(req:Request) = {
-      	  	  val id = req.path().valueFor("moduleId")
-      	  	  val maybeDescriptor = modulesStatus.find(_.maybeDescriptor.get.id.toString == id)
-      	  	  
-      	  	  maybeDescriptor match {
-      	  	    case None=>NOT_FOUND
-      	  	    case Some(descriptor)=>{
-      	  	      
-      	  	      val result = DependencyResolutionResult(fullyResolveAll(descriptor.maybeDescriptor.get.deps))
-  	              val resolutions = result.flatten().map{dep=>
-      	  	        dep.spec.module -> dep.spec.version
-      	  	      }
-      	  	      
-      	  	      OK(Json(Jackson.jackson .writerWithDefaultPrettyPrinter().writeValueAsString(resolutions)))
-      	  	    }
-      	  	  }
-      	  	}
-          },
-          new HttpObject("/modules/{moduleId}"){
-      	  	override def get(req:Request) = {
-      	  	  val id = req.path().valueFor("moduleId")
-      	  	  val maybeDescriptor = modulesStatus.find(_.maybeDescriptor.get.id.toString == id)
-      	  	  
-      	  	  maybeDescriptor match {
-      	  	    case None=>NOT_FOUND
-      	  	    case Some(descriptor)=>OK(Json(Jackson.jackson .writerWithDefaultPrettyPrinter().writeValueAsString(descriptor)))
-      	  	  }
-      	  	}
-      	  	override def delete(req:Request) = {
-      	  	  val idString = req.path().valueFor("moduleId")
-      	  	  val id = {
-      	  	    val parts = idString.split(":")
-      	  	    ModuleId(group = parts(0), name=parts(1))
-      	  	  }
-      	  	  
-      	  	  modulesStatus.filter(_.maybeDescriptor .isDefined).find(_.maybeDescriptor.get.id == id) match {
-      	  	    case None=>NOT_FOUND
-      	  	    case Some(handler)=>{
-      	  	      save(data.copy(moduleDescriptors = data.moduleDescriptors.filter(_!=handler.descriptorPath)))
-      	  	      
-      	  	      OK(Text("Deleted"))
-      	  	    }
-      	  	  }
-      	  	}
-      	  	
-      	  },
-          new HttpObject("/nextBuild"){
-            override def get(req:Request) = {
-            	Main.synchronized(Main.wait())
-            	OK(Text("done"))
-            }
-          },
-          new HttpObject("/modules/{moduleId}/pom"){
-            override def get(req:Request) = {
-      	  	  val id = req.path().valueFor("moduleId")
-      	  	  val maybeDescriptor = modulesStatus.find(_.maybeDescriptor.get.id.toString == id)
-
-      	  	  maybeDescriptor
-      	  	    .flatMap(_.maybeDescriptor)
-      	  	    .map{d=>PomGenerator.generatePOM(d, fullyResolveDependencies(d))}
-      	  	    .map{text=>OK(Text(text))}
-      	  	    .getOrElse(INTERNAL_SERVER_ERROR(Text("Invalid descriptor")))
-            }
-          },
-          new HttpObject("/log"){
-            override def get(req:Request) = {
-              OK(new Representation(){
-                override def contentType = "text/plain"
-                override def write(out:OutputStream) {
-                  val in = new FileInputStream(logPath)
-                  
-                  while(true){
-                    val x = in.read()
-                    x match {
-                      case -1 => Thread.sleep(100)
-                      case _=> {
-                        out.write(x)
-                        out.flush()
-                      }
-                    }
-                  }
-                }
-              })
-            }
-          }
-      )
-      
-      
-      
-      
-      
-      val filesystemChangesOverTime:Stream[Seq[FilesystemChanges]] = {
-        def scanForChanges():Stream[Seq[FilesystemChanges]]= {
-          println("Scanning...")
-          val moduleDescriptors = data.moduleDescriptors
-          val fsChanges = moduleDescriptors.map{descriptorPath=>
-            val paths = Paths(descriptorPath)
-            val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
-  		      val fs = FSNode.forPath(paths.dir, {f => 
-  		        f!=paths.targetDir && 
-  		        !f.getName.equals("pom.xml") && // hack!
-  		        !f.getName().startsWith(".")})
+    def filesystemChangesOverTime:Stream[Seq[FilesystemChanges]] = {
+      def scanForChanges():Stream[Seq[FilesystemChanges]]= {
+        println("Scanning...")
+        val moduleDescriptors = data.moduleDescriptors
+        val fsChanges = moduleDescriptors.map{descriptorPath=>
+          val paths = Paths(descriptorPath)
+          val maybePrev = if (paths.pollingCache.exists()) Some(Jackson.jackson.readValue(paths.pollingCache, classOf[FSNode])) else None 
+		      val fs = FSNode.forPath(paths.dir, {f => 
+		        f!=paths.targetDir && 
+		        !f.getName.equals("pom.xml") && // hack!
+		        !f.getName().startsWith(".")})
     			  val deltas = maybePrev match {
     			    case Some(prev) => fs.deltas(prev)
     			    case None => Seq()
     			  }
-  		      Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(paths.pollingCache, fs);
-  		      
-  		      if(!deltas.isEmpty){
-  		        println("Something changed")
-  		      }
-		        Thread.sleep(200)
-		         
-  		      FilesystemChanges(
-  		          descriptorPath = descriptorPath, 
-  		          maybePrev = maybePrev, 
-  		          currentState = fs, 
-  		          deltas = deltas)
-          }
-          Stream.cons(fsChanges, scanForChanges())
+		      Jackson.jackson.writerWithDefaultPrettyPrinter().writeValue(paths.pollingCache, fs);
+		      
+		      if(!deltas.isEmpty){
+		        println("Something changed")
+		      }
+	        Thread.sleep(200)
+	         
+		      FilesystemChanges(
+		          descriptorPath = descriptorPath, 
+		          maybePrev = maybePrev, 
+		          currentState = fs, 
+		          deltas = deltas)
         }
-        
-        scanForChanges()
+        Stream.cons(fsChanges, scanForChanges)
       }
       
-      val reactor = new BuildReactor(
-          buildMechanisms = buildMechanisms, 
-          parseDescriptor = parseDescriptor,
-          fullyResolveDependencies = fullyResolveDependencies,
-          out = out)
-      
-      val reactorInputEvents = filesystemChangesOverTime.map{fsChanges => 
-        ReactorState(fsChanges, data)
-      }
-      
-      reactor.blockUntilAllInputHasBeenProcessed(reactorInputEvents);
+      scanForChanges
     }
     
+    val reactor = new BuildReactor(
+        buildMechanisms = buildMechanisms, 
+        parseDescriptor = parseDescriptor,
+        fullyResolveDependencies = fullyResolveDependencies,
+        out = out)
     
+    def reactorInputEvents = filesystemChangesOverTime.map{fsChanges => 
+      ReactorState(fsChanges, data)
+    }
+    
+    reactor.allBuildResults(reactorInputEvents).foreach { x => null /* this just blocks & realizes the stream*/}
+    
+    println("Twilight zone! .... the world has stopped changing!!")
       
 }

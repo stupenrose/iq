@@ -24,7 +24,7 @@ class BuildReactorTest extends FunSuite {
     val externalChanges = Stream(ReactorState(fsChanges = Seq(), data = data))
     
     // when
-    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    val result = reactor.allBuildResults(externalChanges)
     
     // then
     assert(result.last == BuildResult(Seq()))
@@ -61,7 +61,7 @@ class BuildReactorTest extends FunSuite {
     val externalChanges = Stream(ReactorState(fsChanges = Seq(fsChanges), data = data))
     
     // when
-    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    val result = reactor.allBuildResults(externalChanges)
     
     // then
     println("Errors: " + result.last.modulesStatus.flatMap { x => x.errors }.mkString(","))
@@ -95,7 +95,7 @@ class BuildReactorTest extends FunSuite {
     val externalChanges = Stream(ReactorState(fsChanges = Seq(), data = data))
     
     // when
-    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    val result = reactor.allBuildResults(externalChanges)
     
     // then
     assert(build.invocations.size == 0)
@@ -146,7 +146,7 @@ class BuildReactorTest extends FunSuite {
     val externalChanges = Stream(ReactorState(fsChanges = Seq(fsChanges), data = data))
     
     // when
-    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    val result = reactor.allBuildResults(externalChanges)
     
     // then
     assert(build.invocations.size == 2)
@@ -206,7 +206,7 @@ class BuildReactorTest extends FunSuite {
     val externalChanges = Stream(ReactorState(fsChanges = Seq(fsChanges), data = data))
     
     // when
-    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    val result = reactor.allBuildResults(externalChanges)
     
     // then
     assert(build.invocations.size == 3)
@@ -266,7 +266,7 @@ class BuildReactorTest extends FunSuite {
     val externalChanges = Stream(ReactorState(fsChanges = Seq(fsChanges), data = data))
     
     // when
-    val result = reactor.blockUntilAllInputHasBeenProcessed(externalChanges)
+    val result = reactor.allBuildResults(externalChanges)
     
     // then
     assert(build.invocations.size == 2)

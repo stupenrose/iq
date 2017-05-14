@@ -130,28 +130,28 @@ object Main {
       
       paths.foreach{path=>
         println("Removing " + path.getAbsolutePath)
-        val request = new GetMethod(BASE_URL + "/modules?path=" + path.getAbsolutePath())
-        val statusCode = client.executeMethod(request)
+//        val request = new GetMethod(BASE_URL + "/modules?path=" + path.getAbsolutePath())
+//        val statusCode = client.executeMethod(request)
+//  
+//        val text = request.getResponseBodyAsString()
+//        request.releaseConnection()
+//  
+//        if(statusCode!=200) throw new RuntimeException("error " + statusCode + ":\n" + text)
+//  
+//    	  val items = Jackson.jackson.readTree(text).map{node=>
+//      	  ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
+//        }
   
-        val text = request.getResponseBodyAsString()
-        request.releaseConnection()
-  
-        if(statusCode!=200) throw new RuntimeException("error " + statusCode + ":\n" + text)
-  
-    	  val items = Jackson.jackson.readTree(text).map{node=>
-      	  ModuleListItem(path=node.at("/path").asText(), id=node.at("/id").asText())
-        }
-  
-        items.find(_.path  == path.getAbsolutePath()) match {
-          case None=> println("no module for " + path.getAbsolutePath())
-          case Some(item)=> {
-        	  val request = new DeleteMethod(BASE_URL + "/modules/" + item.id)
+//        items.find(_.path  == path.getAbsolutePath()) match {
+//          case None=> println("no module for " + path.getAbsolutePath())
+//          case Some(item)=> {
+        	  val request = new DeleteMethod(BASE_URL + "/modules/" + path.getAbsolutePath())
     			  execute(client, request) {statusCode=>
     			  if(statusCode!=200)
     				  throw new Exception("Error " + statusCode + ": (" + request.getURI() + ")\n" + request.getResponseBodyAsString())
         	  }
-          }
-        }
+//          }
+//        }
       }
       
 	}

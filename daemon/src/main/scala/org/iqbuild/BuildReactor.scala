@@ -13,20 +13,21 @@ class BuildReactor(
   
   
   
-  def blockUntilAllInputHasBeenProcessed(externalChanges:Stream[ReactorState]):Stream[BuildResult] = {
+  def allBuildResults(externalChanges:Stream[ReactorState]):Stream[BuildResult] = {
     
     def nextBuild(externalChanges:Stream[ReactorState],  previousBuild:BuildResult):Stream[BuildResult] = {
-      
-      externalChanges.headOption match {
+      val remainder = externalChanges.headOption match {
         case Some(changes) => {
           val result = respondToFilesystemChanges(out, previousBuild, changes)
-          
-          Stream.cons(result, nextBuild(externalChanges.tail, result))
+          val t = externalChanges.tail
+          Stream.cons(result, nextBuild(t, result))
         }
 
-        case None => Stream.Empty
+        case None => {
+          Stream.Empty
+        }
       }
-      
+      remainder
     }
     
     val initialState = BuildResult(modulesStatus = Seq())
