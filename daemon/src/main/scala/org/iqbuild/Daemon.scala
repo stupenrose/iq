@@ -1,6 +1,5 @@
 package org.iqbuild
 
-
 import scala.io.Source
 import java.net.URI
 import java.net.URL
@@ -164,8 +163,25 @@ class Daemon extends Guts {
       ReactorState(fsChanges, data)
     }
     
-    reactor.allBuildResults(reactorInputEvents).foreach { x => null /* this just blocks & realizes the stream*/}
+    def allBuildResults = reactor.allBuildResults(reactorInputEvents)
+    def buildResultsWithPriorResults = {
+      val initialPrevState:(Option[BuildResult], Option[BuildResult]) = (None, None)
+      allBuildResults.scanLeft(initialPrevState){case ((maybePrev, _), current) => 
+        (Some(current), maybePrev)
+      }
+    }
     
-    println("Twilight zone! .... the world has stopped changing!!")
+    /* this blocks forever, realizing the stream
+     * 
+     * */
+    buildResultsWithPriorResults.foreach{case (maybeCurrent, maybePrev) =>  
+        if(maybeCurrent != maybePrev){
+          http.synchronized{
+            http.notifyAll()
+          }
+        }
+    }
+    
+    println("Twilight zone! .... the world has halted forever!")
       
 }

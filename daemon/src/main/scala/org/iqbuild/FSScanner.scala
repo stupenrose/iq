@@ -4,7 +4,7 @@ class FSScanner(guts:Guts) {
   
     def filesystemChangesOverTime:Stream[Seq[FilesystemChanges]] = {
       def scanForChanges():Stream[Seq[FilesystemChanges]]= {
-        println("Scanning...")
+//        println("Scanning...")
         val moduleDescriptors = guts.data.moduleDescriptors
         val fsChanges = moduleDescriptors.map{descriptorPath=>
           val paths = Paths(descriptorPath)

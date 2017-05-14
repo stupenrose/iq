@@ -238,7 +238,7 @@ object Main {
 	        
 		    println("Waiting")
 	        
-	        val client = new HttpClient
+	      val client = new HttpClient
 		    val request = new GetMethod(BASE_URL + "/nextBuild")
 		    client.executeMethod(request)
 		    request.releaseConnection()

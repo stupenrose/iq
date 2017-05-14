@@ -15,8 +15,8 @@
 
 -- usability --
 
-cli starts the daemon if it isn't already running???
-or, package the daemon as 'cli-daemon'?
+[DONE]cli starts the daemon if it isn't already running???
+      or, package the daemon as 'cli-daemon'?
 
 -- unleash other developers --
 develop the generic API for other build processes
@@ -38,6 +38,7 @@ build a war with java classes, coffeescript, jshint & minimization
 build a single jar with scala classes & static resources
 build a single jar with groovy classes & static resources
 build a single jar with clojure code & static resources
+build some haskell
 
 -- maven export --
 [DONE] configure a module to generate a maven companion pom

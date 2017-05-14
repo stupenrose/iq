@@ -45,7 +45,9 @@ class BuildReactor(
         val data = state.data
         val fsChanges = state.fsChanges
         val filesChanged = fsChanges.flatMap(_.deltas).map(_._1.path)
-        println(filesChanged.size + " files changed: " + filesChanged.mkString("\n    ", ",\n    ", "\n"))
+        if(filesChanged.size > 0){
+          println(filesChanged.size + " files changed: " + filesChanged.mkString("\n    ", ",\n    ", "\n"))
+        }
         val moduleDescriptors = data.moduleDescriptors
         
         case class AffectedModule(descriptorPath:String, reasonsForBuild:Seq[String])
