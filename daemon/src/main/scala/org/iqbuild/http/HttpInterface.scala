@@ -8,7 +8,6 @@ import org.httpobjects.util.HttpObjectUtil
 import org.iqbuild.ModuleStatus
 import java.io.File
 import org.iqbuild.Guts
-import org.iqbuild.ModuleListItem
 import org.iqbuild.Jackson
 import org.iqbuild.ModuleDescriptor
 import scala.io.Source
@@ -19,6 +18,7 @@ import org.httpobjects.Representation
 import java.io.OutputStream
 import java.io.FileInputStream
 
+case class ModuleListItem (path:String, id:String)
 class HttpInterface (guts:Guts){
       def data = guts.data
       def save(d:Data) = guts.save(d)

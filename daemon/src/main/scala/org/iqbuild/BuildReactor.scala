@@ -4,7 +4,13 @@ import java.io.PrintStream
 import scala.util.Try
 
 case class ReactorState(fsChanges:Seq[FilesystemChanges], data:Data)
-
+case class BuildResult( modulesStatus:Seq[ModuleStatus])
+case class ModuleBuildError(path:String, where:String, description:String)
+case class ModuleStatus(
+      descriptorPath:String, 
+      maybeDescriptor:Option[ModuleDescriptor],
+      errors:Seq[ModuleBuildError])
+      
 class BuildReactor(
     val buildMechanisms:Map[String, BuildMechanism], 
     val fullyResolveDependencies:ModuleDescriptor=>DependencyResolutionResult,
