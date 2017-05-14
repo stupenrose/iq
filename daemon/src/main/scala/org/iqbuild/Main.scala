@@ -27,7 +27,6 @@ import org.httpobjects.Response
 import org.iqbuild.maven.PomGenerator
 import org.iqbuild.http.HttpInterface
 
-
 case class FilesystemChanges(descriptorPath:String, maybePrev:Option[FSNode], currentState:FSNode, deltas:Seq[(FSNode, FSNode)]) {
   def needsBuild = (maybePrev, deltas) match {
     case (None, _) => true
@@ -182,9 +181,9 @@ class Daemon extends Guts {
     def fullyResolveDependencies(m:ModuleDescriptor):DependencyResolutionResult = {
       println("Resolving..")
       val resolutions = fullyResolveAll(m.deps)
-  	  println("Done") 
-  	  DependencyResolutionResult(resolutions)
-  	}
+    	  println("Done") 
+    	  DependencyResolutionResult(resolutions)
+  	  }
     
     def fullyResolveAll(specs:Seq[DependencySpec]) = {
       specs
