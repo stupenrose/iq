@@ -18,7 +18,6 @@ import org.apache.maven.model.DependencyManagement
 case class ModuleIdAndVersion(id:ModuleId, version:String)
 
 class PomStuff(val coords:ModuleIdAndVersion, val mavenCentral:String, val cache:HttpFetcher){
-          
   val pomUrl = Util.makePomUrl(mavenCentral, coords.id .group , coords.id .name , coords.version)
   val file = cache.get(new URL(pomUrl))
   val xml = try{
@@ -47,7 +46,7 @@ class PomStuff(val coords:ModuleIdAndVersion, val mavenCentral:String, val cache
 	  Some(new PomStuff(ModuleIdAndVersion(ModuleId(groupId, artifactId), version), mavenCentral, cache))
   }
   
-  def resolveExpressions(text:String):String = {
+  def resolveExpressions(text:String, props:Map[String, String] = this.props):String = {
     val expressions = props.map{s=>
       val (k, v) = s
       "${" + k + "}" -> v
@@ -84,9 +83,9 @@ class PomStuff(val coords:ModuleIdAndVersion, val mavenCentral:String, val cache
   
   case class Coords(group:String, artifact:String, version:Option[String], scope:Option[String], isOptional:Boolean)
   
-  def dependencies:Seq[ModuleIdAndVersion] = {
+  def dependencies(scope:String = "compile"):Seq[ModuleIdAndVersion] = {
     val depsNodes = xml.getDependencies().asInstanceOf[java.util.List[Dependency]]
-	val deps = depsNodes.map{node=>
+	  val deps = depsNodes.map{node=>
 		  val groupId = resolveExpressions(node.getGroupId())
 		  val artifactId = resolveExpressions(node.getArtifactId())
 	    
@@ -106,7 +105,11 @@ class PomStuff(val coords:ModuleIdAndVersion, val mavenCentral:String, val cache
 		  
 	  }
     
-    val requiredDeps = deps.filter(!_.isOptional).filter(_.scope.getOrElse("compile") != "provided")
+    val requiredDeps = deps
+                        .filter(!_.isOptional)
+                        .filter(_.scope.getOrElse("compile") != "provided")
+                        .filter(_.scope.getOrElse("compile") == scope)
+                        
     requiredDeps.map{coords=>
 		  val moduleId = ModuleId(coords.group , coords.artifact)
 		  val version = coords.version  match {
@@ -120,12 +123,23 @@ class PomStuff(val coords:ModuleIdAndVersion, val mavenCentral:String, val cache
   
   def props():Map[String, String] = {
     
-    val props = xml.getProperties() match {
+    val rawProps = xml.getProperties() match {
       case null=>Map[String, String]()
       case p:Properties=>{
         p.toMap
       }
     } 
+   
+    def r(key:String, props:Map[String, String]):Map[String, String] = {
+      val value = props(key)
+      val newVal = resolveExpressions(value, props)
+      (props - key) + (key -> newVal)
+    }
+    
+   val props = rawProps.foldLeft(rawProps){case (props:Map[String, String], (key, value))=>
+     val newProps = r(key, props)
+     newProps
+   }
     
     val parentProps = maybeParent match {
       case Some(parent) => parent.props

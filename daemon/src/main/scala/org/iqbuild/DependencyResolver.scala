@@ -51,7 +51,7 @@ class MavenDependencyResolver(val cache:HttpFetcher, val mavenCentral:String = "
         	  try{
       	      val heirarchy = new PomStuff(ModuleIdAndVersion(spec.module, version), mavenCentral, cache)
         	      
-        		  heirarchy.dependencies.map{moduleAndVersion=>
+        		  heirarchy.dependencies().map{moduleAndVersion=>
         		    val ModuleIdAndVersion(moduleId, version) = moduleAndVersion
         		    new DependencySpec(moduleId, Some(version))
       	      }
