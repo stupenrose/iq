@@ -11,6 +11,7 @@ import java.io.PrintWriter
 import java.io.ByteArrayOutputStream
 import java.io.StringWriter
 import scala.util.Try
+import scala.util.Failure
 
 object JarBuild extends BuildMechanism {
       private def toString(t:Throwable):String = {
@@ -78,7 +79,11 @@ object JarBuild extends BuildMechanism {
         
         def createJar() = {
           val contents = Util.find(stagingDir){i=>true}.toList
-          val maybeJar = Try(exec(List("jar", "-cvf", paths.result.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir, out = out, err = out))
+          val maybeJar = if(contents.isEmpty){
+            Failure(new Exception("There were no files to jar"))
+          }else{
+            Try(exec(List("jar", "-cvf", paths.result.getAbsolutePath()) ::: contents.map(relativePath(_, stagingDir)), stagingDir, out = out, err = out))
+          }
           
           maybeJar.failed.toOption.toSeq.map{t=>
             ModuleBuildError(path=paths.result.getAbsolutePath(), "creating jar", toString(t))  
